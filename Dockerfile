@@ -2,6 +2,7 @@
 FROM node:18-bullseye-slim
 
 # Instal semua library sistem yang dibutuhkan oleh Puppeteer/Chromium
+# PERBAIKAN: Menambahkan libdrm2 dan beberapa library umum lainnya
 RUN apt-get update && apt-get install -y \
     wget \
     gconf-service \
@@ -41,6 +42,8 @@ RUN apt-get update && apt-get install -y \
     libnss3 \
     lsb-release \
     xdg-utils \
+    libgbm-dev \
+    libdrm2 \
     --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
