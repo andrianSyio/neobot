@@ -1,0 +1,9 @@
+{
+  "botName": "ANONYMOUSCHAT",
+  "geminiApiKey": "AIzaSyC6PcXSkxu7MNjNWHhhssDoVnMKmem1HHk",
+  "bannedMessage": "Mohon maaf, {nickname}. Aksesmu ke fitur bot telah dibatasi karena adanya pelanggaran. Silakan hubungi admin di 0895322080063.",
+  "replies": {
+    "menu": "*🤖 Halo, {nickname}! 🤖*\r\n\r\n\r\nSelamat datang di *{botName}*!\r\n\r\n*--- Anonymous Chat ---*\r\n- *!chat* -> Cari teman ngobrol acak\r\n- *!stop* -> Hentikan chat/pencarian\r\n\r\n*--- Game & Fitur Lain ---*\r\nKetik *!kuis* untuk memulai permainan!\r\n- *!profil* -> Lihat profil game-mu\r\n- *!rank* -> Lihat papan peringkat",
+    "gameMenu": "*Pilih Kategori Kuis!*\r\n\r\nKetik nomor atau nama game:\r\n1. Kuis Umum 🧠\r\n2. Kuis Hewan 🦁\r\n3. Kuis Budaya Indonesia 🇮🇩\r\n4. MTK (Matematika) 🔢"
+  }
+}

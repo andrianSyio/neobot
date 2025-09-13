@@ -1,0 +1,14 @@
+# Folder dependensi
+node_modules
+
+# File environment lokal (JANGAN DIUPLOAD)
+.env
+
+# File data (akan dibuat & dikelola oleh bot)
+database.json
+logs.json
+violations.json
+chat_logs/
+
+# Folder sesi WhatsApp
+.wwebjs_auth/
