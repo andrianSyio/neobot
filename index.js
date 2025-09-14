@@ -8,10 +8,7 @@ const fs = require('fs');
 const express = require('express');
 const badWords = require('./profanity-list.js');
 
-const client = new Client({
-    authStrategy: new LocalAuth({ dataPath: '.' }),
-    puppeteer: { args: ['--no-sandbox', '--disable-setuid-sandbox'] }
-});
+const client = new Client({ authStrategy: new LocalAuth({ dataPath: '.' }), puppeteer: { args: ['--no-sandbox'] } });
 const app = express();
 const port = process.env.PORT || 3000;
 
@@ -21,15 +18,16 @@ const port = process.env.PORT || 3000;
 const DB_FILE = './database.json';
 const VIOLATIONS_FILE = './violations.json';
 const LOG_DIR = './chat_logs';
+
 let db = {};
 let violations = [];
 let waitingQueue = [];
 let activeChats = {};
 
-// Variabel Baru untuk Status & Log Real-time
 let botStatus = 'INITIALIZING';
 let qrCodeDataUrl = '';
 let serverLogs = [];
+let broadcastStatus = { isRunning: false, progress: 0, total: 0, currentUser: '' };
 
 app.use(express.urlencoded({ extended: true }));
 
@@ -132,6 +130,33 @@ app.post('/toggle-ban', (req, res) => {
     res.redirect('/dashboard');
 });
 
+app.post('/broadcast', (req, res) => {
+    const { message } = req.body;
+    if (!message) { return res.status(400).send("Pesan tidak boleh kosong."); }
+    if (broadcastStatus.isRunning) { return res.status(400).send("Broadcast lain sedang berjalan. Harap tunggu."); }
+    loadDatabase();
+    const allUserIds = Object.keys(db).filter(id => { const user = db[id]; return user && !user.isBanned && user.role !== 'admin'; });
+    broadcastStatus = { isRunning: true, progress: 0, total: allUserIds.length, currentUser: '' };
+    res.status(200).send("Broadcast dimulai! Pantau progres di dashboard.");
+    (async () => {
+        for (let i = 0; i < allUserIds.length; i++) {
+            const userId = allUserIds[i];
+            const user = getUser(userId);
+            broadcastStatus.currentUser = user.nickname;
+            broadcastStatus.progress = i + 1;
+            try { await client.sendMessage(userId, message); } catch (error) { customLog(`[BROADCAST] Gagal mengirim ke ${userId}: ${error.message}`); }
+            const randomDelay = Math.floor(Math.random() * 8000) + 3000;
+            await new Promise(resolve => setTimeout(resolve, randomDelay));
+        }
+        broadcastStatus.isRunning = false;
+        broadcastStatus.currentUser = 'Selesai';
+    })();
+});
+
+app.get('/api/broadcast-status', (req, res) => {
+    res.json(broadcastStatus);
+});
+
 // =================================================================
 //                      LOGIKA UTAMA BOT WHATSAPP
 // =================================================================
@@ -146,40 +171,31 @@ client.on('message', async (message) => {
     if (activeChats[user_id]) {
         const { partner: partner_id, roomId } = activeChats[user_id];
         if (lowerCaseText === '!stop') {
-            delete activeChats[user_id];
-            delete activeChats[partner_id];
+            delete activeChats[user_id]; delete activeChats[partner_id];
             await message.reply('Sesi chat diakhiri. Ketik *!chat* untuk mencari partner baru.');
-            await client.sendMessage(partner_id, 'Yah, partnermu telah mengakhiri sesi. Ketik *!chat* untuk mencari lagi!');
+            await client.sendMessage(partner_id, 'Yah, partnermu telah mengakhiri sesi. Yuk cari lagi dengan ketik *!chat*! 😊');
             return;
         }
         if (lowerCaseText === '!lapor') {
-            const reporter = getUser(user_id);
-            const reported = getUser(partner_id);
-            const timestamp = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
+            const reporter = getUser(user_id); const reported = getUser(partner_id); const timestamp = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
             let chatHistory = [];
             const logPath = `${LOG_DIR}/${roomId}.json`;
-            try {
-                if (fs.existsSync(logPath)) {
-                    const logContent = fs.readFileSync(logPath, 'utf-8');
-                    chatHistory = JSON.parse(logContent).slice(-10);
-                }
-            } catch (error) { customLog(`Gagal membaca log untuk laporan: ${error.message}`); }
+            try { if (fs.existsSync(logPath)) { const logContent = fs.readFileSync(logPath, 'utf-8'); chatHistory = JSON.parse(logContent).slice(-10); } } catch (error) { customLog(`Gagal membaca log untuk laporan: ${error.message}`); }
             violations.push({ timestamp, type: 'Laporan Pengguna', roomId, reporter: { id: user_id, nickname: reporter.nickname }, reported: { id: partner_id, nickname: reported.nickname }, chatHistory });
             saveViolations();
-            delete activeChats[user_id];
-            delete activeChats[partner_id];
-            await message.reply('Laporanmu telah diterima. Sesi chat ini telah dihentikan.');
-            await client.sendMessage(partner_id, 'Sesi chat telah dihentikan oleh sistem karena adanya laporan dari partner.');
+            delete activeChats[user_id]; delete activeChats[partner_id];
+            await message.reply('Laporanmu telah diterima. Sesi chat dihentikan.');
+            await client.sendMessage(partner_id, 'Sesi chat dihentikan oleh sistem karena ada laporan dari partner.');
             return;
         }
         if (checkProfanity(text)) {
             const timestamp = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
             violations.push({ timestamp, type: 'Kata Kasar', userId: user_id, nickname: user.nickname, roomId, message: text });
             saveViolations();
-            return message.reply('Pesanmu mengandung kata kasar dan tidak dikirim. Pelanggaran dicatat.');
+            return message.reply('Eits, bahasanya dijaga ya. Pesanmu nggak aku kirim dan aku catat sebagai pelanggaran.');
         }
         logChatMessage(roomId, user_id, text);
-        await client.sendMessage(partner_id, text);
+        setTimeout(() => { client.sendMessage(partner_id, text); }, 1500);
         return;
     }
 
@@ -191,48 +207,44 @@ client.on('message', async (message) => {
     
     switch (command) {
         case '!chat':
-            if (waitingQueue.includes(user_id)) return message.reply('Kamu sudah dalam antrian. Mohon tunggu...');
+            if (waitingQueue.includes(user_id)) return message.reply('Tenang, kamu sudah dalam antrian kok. Aku lagi cariin partner yang pas, sabar ya!');
             if (waitingQueue.length > 0) {
                 const partner_id = waitingQueue.shift();
-                if (partner_id === user_id) {
-                    waitingQueue.push(user_id);
-                    return message.reply('Mencari partner lain...');
-                }
+                if (partner_id === user_id) { waitingQueue.push(user_id); return message.reply('Ups, hampir dapat diri sendiri. Mencari partner lain...'); }
                 const roomId = generateRoomId();
                 activeChats[user_id] = { partner: partner_id, roomId };
                 activeChats[partner_id] = { partner: user_id, roomId };
                 fs.writeFileSync(`${LOG_DIR}/${roomId}.json`, '[]');
-                await client.sendMessage(user_id, `Asiik, partner ditemukan! Room ID: *${roomId}*. Selamat ngobrol!`);
-                await client.sendMessage(partner_id, `Asiik, partner ditemukan! Room ID: *${roomId}*. Selamat ngobrol!`);
+                await client.sendMessage(user_id, `Asiik, partner ditemukan! Room ID: *${roomId}*. Selamat ngobrol ya!\n\nKalau sudah selesai, jangan lupa ketik *!stop* atau *!lapor*.`);
+                await client.sendMessage(partner_id, `Asiik, partner ditemukan! Room ID: *${roomId}*. Selamat ngobrol ya!\n\nKalau sudah selesai, jangan lupa ketik *!stop* atau *!lapor*.`);
             } else {
                 waitingQueue.push(user_id);
-                await message.reply('Oke, kamu masuk antrian. Aku lagi cariin partner...');
+                await message.reply('Oke, kamu masuk antrian ya. Aku lagi cariin partner yang pas buatmu, sabar sebentar...');
             }
             break;
         case '!stop':
             if (waitingQueue.includes(user_id)) {
                 waitingQueue = waitingQueue.filter(id => id !== user_id);
-                await message.reply('Pencarian dibatalkan.');
+                await message.reply('Pencarian dibatalkan. Kalau berubah pikiran, panggil aku lagi dengan *!chat* ya!');
             } else {
-                await message.reply('Kamu tidak sedang dalam sesi chat atau antrian.');
+                await message.reply('Hmm, sepertinya kamu sedang tidak dalam sesi chat atau antrian.');
             }
             break;
         case '!stiker':
              if (message.hasMedia) {
-                message.reply('Sip, stikernya lagi dibikin...');
+                message.reply('Sip, stikernya lagi dibikin nih...');
                 try {
                     const media = await message.downloadMedia();
                     await client.sendMessage(message.from, media, { sendMediaAsSticker: true, stickerAuthor: "AnonyChat Bot", stickerName: `Stiker by ${user.nickname}` });
                 } catch (error) {
-                    message.reply('Duh, maaf, ada masalah saat membuat stiker.');
+                    message.reply('Duh, maaf, sepertinya ada masalah saat membuat stiker. Coba kirim gambar lain ya.');
                 }
             } else {
-                message.reply('Kirim gambarnya dulu dengan caption *!stiker* ya.');
+                message.reply('Kirim gambarnya dulu dengan caption *!stiker* untuk dibuatkan stiker ya.');
             }
             break;
     }
 });
-
 
 // =================================================================
 //                      MENJALANKAN SERVER & BOT
@@ -251,13 +263,11 @@ client.on('qr', async (qr) => {
     qrCodeDataUrl = await qrcode.toDataURL(qr);
     customLog('[CLIENT] QR Code perlu di-scan. Tampilkan di dashboard.');
 });
-
 client.on('ready', () => {
     botStatus = 'CONNECTED';
-    qrCodeDataUrl = ''; // Hapus QR setelah berhasil login
+    qrCodeDataUrl = '';
     customLog('🚀 Bot WhatsApp sudah siap dan terhubung!');
 });
-
 client.on('disconnected', (reason) => {
     botStatus = 'DISCONNECTED';
     customLog(`[CLIENT DISCONNECTED] ${reason}.`);
