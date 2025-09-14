@@ -9,11 +9,15 @@
         @media (max-width: 768px) {
             .responsive-table thead { display: none; }
             .responsive-table tbody, .responsive-table tr, .responsive-table td { display: block; width: 100%; }
-            .responsive-table tr { margin-bottom: 1rem; border: 1px solid #e2e8f0; border-radius: 0.75rem; overflow: hidden; }
+            .responsive-table tr { margin-bottom: 1rem; border: 1px solid #e2e8f0; border-radius: 0.75rem; overflow: hidden; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1); }
             .responsive-table td { display: flex; justify-content: space-between; align-items: center; text-align: right; padding: 0.75rem 1rem; border-bottom: 1px solid #edf2f7; }
             .responsive-table td::before { content: attr(data-label); font-weight: 600; text-align: left; margin-right: 1rem; color: #4a5568; }
         }
-        .spinner { border-top-color: transparent; }
+        .status-dot { height: 10px; width: 10px; border-radius: 50%; display: inline-block; animation: pulse 2s infinite; }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
     </style>
 </head>
 <body class="bg-slate-100 text-slate-800">
@@ -21,46 +25,43 @@
     <div class="container mx-auto p-4 md:p-8">
         <header class="flex flex-wrap justify-between items-center mb-8 gap-4">
             <div>
-                <h1 class="text-3xl font-bold text-slate-800" id="header-bot-name">🛡️ Admin Dashboard</h1>
+                <h1 class="text-3xl font-bold text-slate-800">🛡️ AnonyChat Dashboard</h1>
                 <p class="text-slate-500">Panel kontrol real-time untuk bot Anda.</p>
             </div>
             <div class="text-sm text-slate-500" id="status-text">Menunggu update...</div>
         </header>
 
-        <div id="anon-status-section" class="mb-8 p-6 bg-white rounded-xl shadow-lg"></div>
-
-        <div class="mb-8 p-6 bg-white rounded-xl shadow-lg">
-            <h2 class="text-xl font-semibold mb-4 border-b pb-2 flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-2.236 9.168-5.518" /></svg>
-                Kirim Pesan Broadcast
-            </h2>
-            <form id="broadcast-form">
-                <div class="mb-4">
-                    <label for="broadcast-message" class="block text-sm font-medium text-slate-600 mb-1">Tulis pesan Anda di sini:</label>
-                    <textarea name="message" id="broadcast-message" rows="4" class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500" placeholder="Contoh: Halo semua, bot akan offline untuk maintenance."></textarea>
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+            <div class="lg:col-span-1 space-y-8">
+                <div class="p-6 bg-white rounded-xl shadow-lg">
+                    <h2 class="text-xl font-semibold mb-4 border-b pb-2">🚦 Status Bot</h2>
+                    <div class="flex items-center space-x-3">
+                        <span id="status-dot" class="status-dot bg-gray-400"></span>
+                        <span id="status-label" class="font-medium text-lg">Inisialisasi...</span>
+                    </div>
                 </div>
-                <button type="submit" id="broadcast-button" class="w-full inline-flex justify-center items-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700">
-                    <span id="button-text">Kirim ke Semua Pengguna Aktif</span>
-                    <svg id="button-spinner" class="animate-spin ml-2 h-5 w-5 text-white hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                </button>
-                <p class="mt-3 text-xs text-rose-600">⚠️ **Peringatan:** Gunakan dengan hati-hati. Risiko nomor diblokir.</p>
-                <div id="broadcast-progress-section" class="mt-4 hidden">
-                    <div class="text-sm font-medium text-slate-700 mb-1" id="progress-text">Mengirim...</div>
-                    <div class="w-full bg-gray-200 rounded-full h-2.5"><div id="progress-bar" class="bg-blue-600 h-2.5 rounded-full" style="width: 0%"></div></div>
+                <div id="qr-code-container" class="text-center p-4 bg-white border-2 border-dashed rounded-xl shadow-lg hidden">
+                    <p class="mb-2 font-semibold">Silakan Scan QR Code untuk Login</p>
+                    <img id="qr-code-image" src="" alt="QR Code" class="mx-auto w-full max-w-xs">
                 </div>
-                <div id="broadcast-status" class="mt-3 text-sm text-green-700 font-semibold"></div>
-            </form>
+            </div>
+            
+            <div class="lg:col-span-2 p-6 bg-white rounded-xl shadow-lg" id="anon-status-section">
+                </div>
         </div>
 
         <div>
             <div class="mb-4 border-b border-gray-200">
-                <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+                <nav class="-mb-px flex space-x-4 sm:space-x-8 overflow-x-auto" aria-label="Tabs">
                     <button onclick="changeTab('users')" class="tab-button border-indigo-500 text-indigo-600 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">Manajemen User</button>
                     <button onclick="changeTab('violations')" class="tab-button border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">Log Pelanggaran</button>
+                    <button onclick="changeTab('logs')" class="tab-button border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">Aktivitas Bot</button>
                 </nav>
             </div>
+
             <div id="users-content" class="tab-content bg-white rounded-lg shadow-lg overflow-hidden"></div>
             <div id="violations-content" class="tab-content bg-white rounded-lg shadow-lg overflow-hidden hidden"></div>
+            <div id="logs-content" class="tab-content bg-slate-800 text-white font-mono text-xs rounded-b-lg shadow-lg hidden"></div>
         </div>
     </div>
 
@@ -72,11 +73,11 @@
     </div>
 
     <script>
-        const updateInterval = 3000;
+        const updateInterval = 3000; // Refresh setiap 3 detik
         let cachedData = {};
 
         function changeTab(tabName) {
-            ['users', 'violations'].forEach(tab => {
+            ['users', 'violations', 'logs'].forEach(tab => {
                 document.getElementById(`${tab}-content`).classList.add('hidden');
                 const button = document.querySelector(`button[onclick="changeTab('${tab}')"]`);
                 button.classList.remove('border-indigo-500', 'text-indigo-600');
@@ -85,10 +86,53 @@
             document.getElementById(`${tabName}-content`).classList.remove('hidden');
             document.querySelector(`button[onclick="changeTab('${tabName}')"]`).classList.add('border-indigo-500', 'text-indigo-600');
         }
+        
+        function renderBotStatus(status, qrCode) {
+            const dot = document.getElementById('status-dot');
+            const label = document.getElementById('status-label');
+            const qrContainer = document.getElementById('qr-code-container');
+            const qrImage = document.getElementById('qr-code-image');
+
+            dot.className = 'status-dot'; // Reset class
+            if (status === 'CONNECTED') {
+                dot.classList.add('bg-green-500');
+                label.textContent = 'Terhubung';
+                qrContainer.classList.add('hidden');
+            } else if (status === 'WAITING_FOR_QR_SCAN') {
+                dot.classList.add('bg-yellow-500');
+                label.textContent = 'Menunggu Scan QR...';
+                if (qrCode) {
+                    qrImage.src = qrCode;
+                    qrContainer.classList.remove('hidden');
+                }
+            } else if (status === 'DISCONNECTED') {
+                dot.classList.add('bg-red-500');
+                label.textContent = 'Terputus';
+                qrContainer.classList.add('hidden');
+            } else {
+                dot.classList.add('bg-gray-400');
+                label.textContent = 'Inisialisasi...';
+                qrContainer.classList.add('hidden');
+            }
+        }
+
+        function renderServerLogs(logs) {
+            const container = document.getElementById('logs-content');
+            let logHTML = `<div class="p-4 h-96 overflow-y-auto">`;
+            logs.slice().reverse().forEach(log => {
+                logHTML += `<div><span class="text-green-400">${log.timestamp}:</span><span class="text-slate-300"> ${log.message}</span></div>`;
+            });
+            logHTML += `</div>`;
+            container.innerHTML = logHTML;
+        }
 
         function renderAnonStatus(data) {
             const container = document.getElementById('anon-status-section');
-            let statusHTML = `<h2 class="text-xl font-semibold mb-4 border-b pb-2">💞 Status Anonymous Chat</h2><div class="grid md:grid-cols-2 gap-6"><div><h3 class="font-bold mb-2">👥 Menunggu Partner (${data.waiting.length})</h3><div class="text-gray-600 h-32 overflow-y-auto bg-gray-50 p-3 rounded-lg">${data.waiting.length > 0 ? data.waiting.map(u => `<div>- ${u.nickname}</div>`).join('') : '<div class="text-gray-400">Tidak ada yang menunggu...</div>'}</div></div><div><h3 class="font-bold mb-2">💬 Room Aktif (${data.active.length})</h3><div class="text-gray-600 h-32 overflow-y-auto bg-gray-50 p-3 rounded-lg">${data.active.length > 0 ? data.active.map(p => `<div>- <a href="#" onclick="showChatLog('${p.roomId}')" class="text-blue-500 hover:underline font-semibold">${p.roomId}</a>: ${p.user1} ↔ ${p.user2}</div>`).join('') : '<div class="text-gray-400">Tidak ada yang aktif...</div>'}</div></div></div>`;
+            let statusHTML = `<h2 class="text-xl font-semibold mb-4 border-b pb-2">💞 Status Anonymous Chat</h2>
+                <div class="grid md:grid-cols-2 gap-6">
+                    <div><h3 class="font-bold mb-2">👥 Menunggu Partner (${data.waiting.length})</h3><div class="text-gray-600 h-32 overflow-y-auto bg-gray-50 p-3 rounded-lg">${data.waiting.length > 0 ? data.waiting.map(u => `<div>- ${u.nickname}</div>`).join('') : '<div class="text-gray-400">Tidak ada yang menunggu...</div>'}</div></div>
+                    <div><h3 class="font-bold mb-2">💬 Room Aktif (${data.active.length})</h3><div class="text-gray-600 h-32 overflow-y-auto bg-gray-50 p-3 rounded-lg">${data.active.length > 0 ? data.active.map(p => `<div>- <a href="#" onclick="showChatLog('${p.roomId}')" class="text-blue-500 hover:underline font-semibold">${p.roomId}</a>: ${p.user1} ↔ ${p.user2}</div>`).join('') : '<div class="text-gray-400">Tidak ada yang aktif...</div>'}</div></div>
+                </div>`;
             container.innerHTML = statusHTML;
         }
 
@@ -116,36 +160,7 @@
             tableHTML += `</tbody></table></div>`;
             container.innerHTML = tableHTML;
         }
-
-        function renderBroadcastStatus(status) {
-            const progressSection = document.getElementById('broadcast-progress-section');
-            const progressBar = document.getElementById('progress-bar');
-            const progressText = document.getElementById('progress-text');
-            const broadcastButton = document.getElementById('broadcast-button');
-            const buttonText = document.getElementById('button-text');
-            const buttonSpinner = document.getElementById('button-spinner');
-
-            if (status.isRunning) {
-                progressSection.classList.remove('hidden');
-                const percent = status.total > 0 ? (status.progress / status.total) * 100 : 0;
-                progressBar.style.width = `${percent}%`;
-                progressText.textContent = `Mengirim ke ${status.currentUser} (${status.progress}/${status.total})...`;
-                buttonText.textContent = 'Mengirim...';
-                buttonSpinner.classList.remove('hidden');
-                broadcastButton.disabled = true;
-            } else {
-                if (status.currentUser === 'Selesai') {
-                     progressText.textContent = `Broadcast Selesai! Terkirim ke ${status.total} pengguna.`;
-                     progressBar.style.width = `100%`;
-                } else {
-                    progressSection.classList.add('hidden');
-                }
-                buttonText.textContent = 'Kirim ke Semua Pengguna Aktif';
-                buttonSpinner.classList.add('hidden');
-                broadcastButton.disabled = false;
-            }
-        }
-
+        
         const modal = document.getElementById('chat-modal');
         async function showChatLog(roomId) {
             document.getElementById('modal-room-id').textContent = `Isi Chat Room: ${roomId}`;
@@ -161,6 +176,7 @@
                 contentDiv.innerHTML = chatHTML;
             } catch (error) { contentDiv.innerHTML = 'Gagal memuat log chat.'; }
         }
+
         function showReportedChat(violationIndex) {
             const violation = cachedData.violations.slice().reverse()[violationIndex];
             document.getElementById('modal-room-id').textContent = `Bukti Laporan Room: ${violation.roomId}`;
@@ -176,56 +192,35 @@
             contentDiv.innerHTML = chatHTML;
             modal.classList.remove('hidden');
         }
+
         function closeModal() { modal.classList.add('hidden'); }
 
         async function updateAllData() {
             try {
-                const [statusResponse, broadcastResponse] = await Promise.all([
-                    fetch('/api/status'),
-                    fetch('/api/broadcast-status')
-                ]);
-                if (!statusResponse.ok || !broadcastResponse.ok) throw new Error('Gagal mengambil data.');
+                const response = await fetch('/api/status');
+                if (!response.ok) throw new Error('Gagal mengambil data dari server.');
+                const data = await response.json();
 
-                const statusData = await statusResponse.json();
-                const broadcastData = await broadcastResponse.json();
-                const data = { ...statusData, broadcast: broadcastData };
-
+                // Hanya render ulang data tabel jika ada perubahan
                 if (JSON.stringify(data) !== JSON.stringify(cachedData)) {
                     cachedData = data;
+                    const usersArray = data.users;
                     renderAnonStatus(data);
-                    renderUserTable(data.users);
+                    renderUserTable(usersArray);
                     renderViolationTable(data.violations);
                 }
-                renderBroadcastStatus(data.broadcast);
+                
+                // Selalu update status bot dan log secara real-time
+                renderBotStatus(data.botStatus, data.qrCode);
+                renderServerLogs(data.serverLogs);
+
                 document.getElementById('status-text').textContent = `Data diperbarui pada: ${new Date().toLocaleTimeString('id-ID')}`;
             } catch (error) {
                 console.error("Gagal update data:", error);
                 document.getElementById('status-text').textContent = "Gagal memuat data.";
+                renderBotStatus('DISCONNECTED', ''); // Jika API gagal, anggap bot terputus
             }
         };
-        
-        const broadcastForm = document.getElementById('broadcast-form');
-        const broadcastStatusDiv = document.getElementById('broadcast-status');
-        broadcastForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const message = document.getElementById('broadcast-message').value;
-            if (!message || message.trim() === '') return;
-            broadcastStatusDiv.textContent = '';
-            renderBroadcastStatus({ isRunning: true, progress: 0, total: 'N/A', currentUser: 'Memulai...'});
-            try {
-                const response = await fetch('/broadcast', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: `message=${encodeURIComponent(message)}`
-                });
-                const resultText = await response.text();
-                broadcastStatusDiv.textContent = resultText;
-                document.getElementById('broadcast-message').value = '';
-                setTimeout(() => { broadcastStatusDiv.textContent = ''; }, 5000);
-            } catch (error) {
-                broadcastStatusDiv.textContent = "Gagal mengirim broadcast.";
-            }
-        });
         
         updateAllData();
         setInterval(updateAllData, updateInterval);
