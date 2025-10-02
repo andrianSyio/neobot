@@ -56,6 +56,19 @@
                         <span id="status-label" class="font-semibold text-lg text-slate-100">Inisialisasi...</span>
                     </div>
                 </div>
+
+                <div class="p-6 bg-slate-800/50 border border-slate-700 rounded-2xl transition-all duration-300 hover:border-indigo-500/80">
+                    <h2 class="text-xl font-bold mb-4 border-b border-slate-700 pb-3 text-slate-100">📣 Kirim Broadcast</h2>
+                    <form id="broadcast-form" class="space-y-4">
+                        <textarea id="broadcast-message" name="message" rows="4" class="w-full bg-slate-900/50 border border-slate-600 rounded-lg p-3 text-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition" placeholder="Ketik pesan broadcast Anda di sini..."></textarea>
+                        <button type="submit" id="send-broadcast-btn" class="w-full flex items-center justify-center gap-2 bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-700 active:bg-indigo-800 transition-colors duration-300 disabled:bg-slate-600 disabled:cursor-not-allowed">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.428A1 1 0 009.894 15V4.106A1 1 0 0010.894 2.553z" /><path d="M10.106 4.106V15a1 1 0 00.787.97l5 1.428a1 1 0 001.17-1.408l-7-14a1 1 0 00-1.652.114z" /></svg>
+                            Kirim ke Semua User
+                        </button>
+                        <p id="broadcast-status" class="text-center text-sm text-slate-400 h-4 transition-all"></p>
+                    </form>
+                </div>
+                
                 <div id="qr-code-container" class="text-center p-6 bg-slate-800/50 border-2 border-dashed border-slate-600 rounded-2xl hidden transition-all duration-300">
                     <p class="mb-3 font-semibold text-slate-200">Silakan Scan QR Code untuk Login</p>
                     <img id="qr-code-image" src="" alt="QR Code" class="mx-auto w-full max-w-xs rounded-lg">
@@ -90,8 +103,7 @@
     </div>
 
     <script>
-        // --- SCRIPT LAMA ANDA TETAP DI SINI, TIDAK ADA YANG DIUBAH ---
-        // --- Cukup salin-tempel (copy-paste) seluruh script dari file lama Anda ke sini ---
+        // --- SCRIPT LAMA ANDA ---
         const updateInterval = 5000;
         let cachedData = {};
 
@@ -227,8 +239,54 @@
         };
         
         document.addEventListener('DOMContentLoaded', () => {
+            // Update data rutin
             updateAllData();
             setInterval(updateAllData, updateInterval);
+
+            // --- SCRIPT BARU UNTUK FITUR BROADCAST ---
+            const broadcastForm = document.getElementById('broadcast-form');
+            const messageInput = document.getElementById('broadcast-message');
+            const sendBtn = document.getElementById('send-broadcast-btn');
+            const statusText = document.getElementById('broadcast-status');
+
+            broadcastForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const message = messageInput.value.trim();
+                if (!message) {
+                    statusText.textContent = "Pesan tidak boleh kosong!";
+                    statusText.classList.add('text-rose-400');
+                    return;
+                }
+
+                sendBtn.disabled = true;
+                statusText.textContent = "Mengirim...";
+                statusText.classList.remove('text-rose-400', 'text-green-400');
+                
+                try {
+                    const response = await fetch('/api/broadcast', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ message: message })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Server merespon dengan error.');
+                    }
+
+                    const result = await response.json();
+                    statusText.textContent = "Broadcast berhasil terkirim!";
+                    statusText.classList.add('text-green-400');
+                    messageInput.value = ''; // Kosongkan textarea setelah berhasil
+
+                } catch (error) {
+                    console.error('Gagal mengirim broadcast:', error);
+                    statusText.textContent = "Gagal mengirim broadcast.";
+                    statusText.classList.add('text-rose-400');
+                } finally {
+                    sendBtn.disabled = false;
+                    setTimeout(() => { statusText.textContent = ''; }, 4000); // Hilangkan status setelah 4 detik
+                }
+            });
         });
     </script>
 </body>
