@@ -6,10 +6,11 @@
     <title>Bot Admin Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Poppins', sans-serif; }
-        .glass-card { background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.2); }
         @media (max-width: 768px) {
             .responsive-table thead { display: none; }
             .responsive-table tbody, .responsive-table tr, .responsive-table td { display: block; width: 100%; }
@@ -17,46 +18,37 @@
             .responsive-table td { display: flex; justify-content: space-between; align-items: center; text-align: right; padding: 0.75rem 1rem; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
             .responsive-table td::before { content: attr(data-label); font-weight: 600; text-align: left; margin-right: 1rem; color: #cbd5e1; }
         }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
     </style>
 </head>
 <body class="bg-gradient-to-br from-slate-900 via-indigo-900 to-slate-900 text-slate-200">
 
     <div class="container mx-auto p-4 md:p-8">
         <header class="flex flex-wrap justify-between items-center mb-8 gap-4">
-            <div><h1 class="text-3xl font-bold text-white" id="header-bot-name">🛡️ Admin Dashboard</h1><p class="text-slate-400">Panel kontrol real-time untuk bot Anda.</p></div>
+            <div>
+                <h1 class="text-3xl font-bold text-white" id="header-bot-name">🛡️ Admin Dashboard</h1>
+                <p class="text-slate-400">Panel kontrol real-time untuk bot Anda.</p>
+            </div>
             <div class="text-sm text-slate-300" id="status-text">Menunggu update...</div>
         </header>
 
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8" id="stat-cards-container"></div>
         <div id="anon-status-section" class="mb-8 p-6 glass-card rounded-xl shadow-lg"></div>
-
-        <div class="mb-8 p-6 glass-card rounded-xl shadow-lg">
-            <h2 class="text-xl font-semibold mb-4 border-b border-white/20 pb-2 flex items-center text-white"><i class="fa-solid fa-paper-plane mr-3 text-indigo-400"></i>Kirim Pesan Broadcast</h2>
-            <form id="broadcast-form">
-                <div class="mb-4">
-                    <label for="broadcast-message" class="block text-sm font-medium text-slate-300 mb-1">Tulis pesan Anda di sini:</label>
-                    <textarea name="message" id="broadcast-message" rows="4" class="w-full p-2 border rounded-md border-slate-600 bg-slate-700/50 text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500" placeholder="Contoh: Halo semua, bot akan offline untuk maintenance."></textarea>
-                </div>
-                <button type="submit" id="broadcast-button" class="w-full inline-flex justify-center items-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700">
-                    <span id="button-text">Kirim ke Semua Pengguna Aktif</span>
-                    <svg id="button-spinner" class="animate-spin ml-2 h-5 w-5 text-white hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                </button>
-                <p class="mt-3 text-xs text-rose-400">⚠️ **Peringatan:** Gunakan dengan hati-hati. Risiko nomor diblokir.</p>
-                <div id="broadcast-progress-section" class="mt-4 hidden">
-                    <div class="text-sm font-medium text-slate-300 mb-1" id="progress-text">Mengirim...</div>
-                    <div class="w-full bg-slate-700 rounded-full h-2.5"><div id="progress-bar" class="bg-blue-500 h-2.5 rounded-full" style="width: 0%"></div></div>
-                </div>
-                <div id="broadcast-status" class="mt-3 text-sm text-green-400 font-semibold"></div>
-            </form>
-        </div>
         
         <div>
             <div class="mb-4 border-b border-white/20">
                 <nav class="-mb-px flex space-x-4 sm:space-x-8 overflow-x-auto" aria-label="Tabs">
                     <button onclick="changeTab('users')" class="tab-button border-indigo-400 text-white whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">Manajemen User</button>
                     <button onclick="changeTab('violations')" class="tab-button border-transparent text-slate-400 hover:text-white hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">Log Pelanggaran</button>
-                    <button onclick="changeTab('settings')" class="tab-button border-transparent text-slate-400 hover:text-white hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">Pengaturan Teks</button>
+                    <button onclick="changeTab('settings')" class="tab-button border-transparent text-slate-400 hover:text-white hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">Pengaturan Bot</button>
                 </nav>
             </div>
+
             <div id="users-content" class="tab-content glass-card rounded-lg shadow-lg overflow-hidden"></div>
             <div id="violations-content" class="tab-content glass-card rounded-lg shadow-lg overflow-hidden hidden"></div>
             <div id="settings-content" class="tab-content glass-card rounded-lg shadow-lg p-6 hidden"></div>
@@ -73,6 +65,7 @@
     <script>
         const updateInterval = 5000;
         let cachedData = {};
+
         function changeTab(tabName) {
             ['users', 'violations', 'settings'].forEach(tab => {
                 document.getElementById(`${tab}-content`).classList.add('hidden');
@@ -82,22 +75,44 @@
             document.getElementById(`${tabName}-content`).classList.remove('hidden');
             document.querySelector(`button[onclick="changeTab('${tabName}')"]`).classList.add('border-indigo-400', 'text-white');
         }
+
+        function renderStatCards(data) {
+            const container = document.getElementById('stat-cards-container');
+            container.innerHTML = `
+                <div class="glass-card p-6 rounded-xl shadow-lg flex items-center space-x-4"><div class="bg-blue-500/20 p-3 rounded-full"><i class="fa-solid fa-users fa-lg text-blue-300"></i></div><div><p class="text-sm text-slate-400">Total Pengguna</p><p class="text-2xl font-bold text-white">${data.users.length}</p></div></div>
+                <div class="glass-card p-6 rounded-xl shadow-lg flex items-center space-x-4"><div class="bg-teal-500/20 p-3 rounded-full"><i class="fa-solid fa-hourglass-half fa-lg text-teal-300"></i></div><div><p class="text-sm text-slate-400">Dalam Antrian</p><p class="text-2xl font-bold text-white">${data.waiting.length}</p></div></div>
+                <div class="glass-card p-6 rounded-xl shadow-lg flex items-center space-x-4"><div class="bg-indigo-500/20 p-3 rounded-full"><i class="fa-solid fa-comments fa-lg text-indigo-300"></i></div><div><p class="text-sm text-slate-400">Room Aktif</p><p class="text-2xl font-bold text-white">${data.active.length}</p></div></div>
+                <div class="glass-card p-6 rounded-xl shadow-lg flex items-center space-x-4"><div class="bg-rose-500/20 p-3 rounded-full"><i class="fa-solid fa-user-slash fa-lg text-rose-300"></i></div><div><p class="text-sm text-slate-400">Total Pelanggaran</p><p class="text-2xl font-bold text-white">${data.violations.length}</p></div></div>`;
+        }
+        
         function renderAnonStatus(data) {
             const container = document.getElementById('anon-status-section');
-            statusHTML = `<h2 class="text-xl font-semibold mb-4 border-b border-white/20 pb-2 text-white flex items-center"><i class="fa-solid fa-circle-nodes mr-3 text-sky-400"></i>Status Anonymous Chat</h2><div class="grid md:grid-cols-2 gap-6"><div class="bg-white/5 p-4 rounded-lg"><h3 class="font-bold mb-2 text-slate-300 flex items-center"><i class="fa-solid fa-hourglass-half mr-2"></i> Menunggu Partner (${data.waiting.length})</h3><div class="text-slate-200 h-32 overflow-y-auto p-1 text-sm">${data.waiting.length > 0 ? data.waiting.map(u => `<div>- ${u.nickname}</div>`).join('') : '<div class="text-slate-400">Antrian kosong...</div>'}</div></div><div class="bg-white/5 p-4 rounded-lg"><h3 class="font-bold mb-2 text-slate-300 flex items-center"><i class="fa-solid fa-comments mr-2"></i> Room Aktif (${data.active.length})</h3><div class="text-slate-200 h-32 overflow-y-auto p-1 text-sm">${data.active.length > 0 ? data.active.map(p => `<div>- <a href="#" onclick="showChatLog('${p.roomId}')" class="text-sky-400 hover:underline font-semibold">${p.roomId}</a>: ${p.user1} ↔ ${p.user2}</div>`).join('') : '<div class="text-slate-400">Tidak ada room aktif...</div>'}</div></div></div>`;
+            statusHTML = `<h2 class="text-xl font-semibold mb-4 border-b border-white/20 pb-2 text-white flex items-center"><i class="fa-solid fa-circle-nodes mr-3 text-sky-400"></i>Status Anonymous Chat</h2><div class="grid md:grid-cols-2 gap-6"><div class="bg-white/5 p-4 rounded-lg">
+                <h3 class="font-bold mb-2 text-slate-300 flex items-center"><i class="fa-solid fa-hourglass-half mr-2"></i> Menunggu Partner (${data.waiting.length})</h3>
+                <div class="text-slate-200 h-32 overflow-y-auto p-1 text-sm">${data.waiting.length > 0 ? data.waiting.map(u => `<div>- ${u.nickname}</div>`).join('') : '<div class="text-slate-400">Antrian kosong...</div>'}</div></div>
+                <div class="bg-white/5 p-4 rounded-lg"><h3 class="font-bold mb-2 text-slate-300 flex items-center"><i class="fa-solid fa-comments mr-2"></i> Room Aktif (${data.active.length})</h3>
+                <div class="text-slate-200 h-32 overflow-y-auto p-1 text-sm">${data.active.length > 0 ? data.active.map(p => `<div>- <a href="#" onclick="showChatLog('${p.roomId}')" class="text-sky-400 hover:underline font-semibold">${p.roomId}</a>: ${p.user1} ↔ ${p.user2}</div>`).join('') : '<div class="text-slate-400">Tidak ada room aktif...</div>'}</div></div></div>`;
             container.innerHTML = statusHTML;
         }
+
         function renderUserTable(users) {
             const container = document.getElementById('users-content');
-            let tableHTML = `<div class="overflow-x-auto"><table class="w-full text-sm text-left text-slate-300 responsive-table"><thead class="bg-white/5 text-xs uppercase text-slate-400"><tr><th class="px-6 py-3">Nickname</th><th class="px-6 py-3">Status</th><th class="px-6 py-3 text-center">Aksi</th></tr></thead><tbody>`;
+            let tableHTML = `<div class="overflow-x-auto"><table class="w-full text-sm text-left text-slate-300 responsive-table"><thead class="bg-white/5 text-xs uppercase text-slate-400"><tr><th class="px-6 py-3">Nickname</th><th class="px-6 py-3">XP</th><th class="px-6 py-3">Tier</th><th class="px-6 py-3">Status</th><th class="px-6 py-3 text-center">Aksi</th></tr></thead><tbody>`;
             users.forEach(user => {
                 const isBannedClass = user.isBanned ? 'bg-rose-500/20' : '';
                 const statusBadge = user.isBanned ? `<span class="px-2 py-1 text-xs font-semibold text-white bg-rose-500 rounded-full">Banned</span>` : `<span class="px-2 py-1 text-xs font-semibold text-white bg-teal-500 rounded-full">Aktif</span>`;
                 const banButton = user.isBanned ? `<button type="submit" class="px-3 py-1 bg-sky-500 text-white text-xs rounded-md hover:bg-sky-600">Unban</button>` : `<button type="submit" class="px-3 py-1 bg-rose-500 text-white text-xs rounded-md hover:bg-rose-600">Ban</button>`;
-                tableHTML += `<tr class="border-b border-white/10 hover:bg-white/5 ${isBannedClass}"><td data-label="Nickname" class="px-6 py-4 font-medium text-white">${user.nickname}<span class="text-slate-400 text-xs block">${user.id.split('@')[0]}</span></td><td data-label="Status" class="px-6 py-4">${statusBadge}</td><td data-label="Aksi" class="px-6 py-4 flex items-center justify-end md:justify-center"><form action="/toggle-ban" method="POST" class="contents"><input type="hidden" name="userId" value="${user.id}">${banButton}</form></td></tr>`;
+                tableHTML += `<tr class="border-b border-white/10 hover:bg-white/5 ${isBannedClass}"><td data-label="Nickname" class="px-6 py-4 font-medium text-white">${user.nickname}<span class="text-slate-400 text-xs block">${user.id.split('@')[0]}</span></td>
+                    <form action="/update-user" method="POST" class="contents"><input type="hidden" name="userId" value="${user.id}">
+                        <td data-label="XP" class="px-6 py-4"><input type="number" name="xp" value="${user.xp}" class="w-20 p-1 border rounded bg-slate-700 border-slate-600 text-white"></td>
+                        <td data-label="Tier" class="px-6 py-4 font-semibold text-white">${user.tier}</td><td data-label="Status" class="px-6 py-4">${statusBadge}</td>
+                        <td data-label="Aksi" class="px-6 py-4 flex items-center justify-end md:justify-center space-x-2 action-cell"><button type="submit" class="px-3 py-1 bg-indigo-500 text-white text-xs rounded-md hover:bg-indigo-600">Update</button>
+                    </form><form action="/toggle-ban" method="POST" class="contents"><input type="hidden" name="userId" value="${user.id}">${banButton}</form></td></tr>`;
             });
-            tableHTML += `</tbody></table></div>`; container.innerHTML = tableHTML;
+            tableHTML += `</tbody></table></div>`;
+            container.innerHTML = tableHTML;
         }
+        
         function renderViolationTable(violations) {
             const container = document.getElementById('violations-content');
             let tableHTML = `<h2 class="text-xl font-semibold p-4 border-b border-white/20 text-white">🚫 Log Pelanggaran</h2><div class="overflow-x-auto"><table class="w-full text-sm text-left text-slate-300 responsive-table"><thead class="bg-white/5 text-xs uppercase text-slate-400"><tr><th class="px-6 py-3">Waktu</th><th class="px-6 py-3">Tipe</th><th class="px-6 py-3">Pelaku/Pelapor</th><th class="px-6 py-3">Detail</th></tr></thead><tbody>`;
@@ -106,52 +121,92 @@
                 let detailInfo = v.type === 'Laporan Pengguna' ? `<button onclick="showReportedChat(${violations.length - 1 - index})" class="text-sky-400 hover:underline">Lihat Chat</button>` : `<span class="text-rose-400">${v.message}</span>`;
                 tableHTML += `<tr class="border-b border-white/10 hover:bg-white/5"><td data-label="Waktu" class="px-6 py-4 whitespace-nowrap">${v.timestamp}</td><td data-label="Tipe" class="px-6 py-4 font-semibold text-white">${v.type}</td><td data-label="Pelaku/Pelapor" class="px-6 py-4">${reporterInfo}</td><td data-label="Detail" class="px-6 py-4">${detailInfo}</td></tr>`;
             });
-            tableHTML += `</tbody></table></div>`; container.innerHTML = tableHTML;
+            tableHTML += `</tbody></table></div>`;
+            container.innerHTML = tableHTML;
         }
+
         function renderSettingsForm(config) {
             const container = document.getElementById('settings-content');
-            container.innerHTML = `<h2 class="text-2xl font-bold mb-6 border-b border-white/20 text-white">⚙️ Pengaturan Teks Bot</h2>
+            container.innerHTML = `<h2 class="text-2xl font-bold mb-6 border-b border-white/20 text-white">⚙️ Pengaturan Bot</h2>
                 <form action="/update-config" method="POST" class="space-y-6">
                     <div><label for="botName" class="block text-sm font-medium text-slate-300">Nama Bot</label>
                     <input type="text" name="botName" id="botName" value="${config.botName}" class="mt-1 block w-full rounded-md border-slate-600 bg-slate-700/50 text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"></div>
+                    <div><label for="geminiApiKey" class="block text-sm font-medium text-slate-300">Gemini API Key</label>
+                    <input type="text" name="geminiApiKey" id="geminiApiKey" value="${config.geminiApiKey}" class="mt-1 block w-full rounded-md border-slate-600 bg-slate-700/50 text-white shadow-sm">
+                    <p class="mt-2 text-xs text-rose-400">Peringatan: Mengubah ini akan memuat ulang koneksi AI. Hati-hati saat mengedit.</p></div>
                     <div><label for="bannedMessage" class="block text-sm font-medium text-slate-300">Pesan untuk User Banned</label>
                     <textarea name="bannedMessage" id="bannedMessage" rows="3" class="mt-1 block w-full rounded-md border-slate-600 bg-slate-700/50 text-white shadow-sm">${config.bannedMessage}</textarea></div>
                     <div><label for="menuReply" class="block text-sm font-medium text-slate-300">Balasan Teks !menu</label>
                     <textarea name="menuReply" id="menuReply" rows="10" class="mt-1 block w-full rounded-md border-slate-600 bg-slate-700/50 text-white shadow-sm">${config.replies.menu}</textarea>
-                    <p class="mt-2 text-xs text-slate-400">Gunakan {nickname} dan {botName} untuk data dinamis.</p></div>
+                    <p class="mt-2 text-xs text-slate-400">Gunakan {nickname}, {xp}, {tier}, {botName} untuk data dinamis.</p></div>
+                    <div><label for="gameMenuReply" class="block text-sm font-medium text-slate-300">Balasan Teks Menu Kuis</label>
+                    <textarea name="gameMenuReply" id="gameMenuReply" rows="6" class="mt-1 block w-full rounded-md border-slate-600 bg-slate-700/50 text-white shadow-sm">${config.replies.gameMenu}</textarea></div>
                     <div class="pt-4"><button type="submit" class="w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700">Simpan Pengaturan</button></div>
                 </form>`;
         }
+        
         const modal = document.getElementById('chat-modal');
-        async function showChatLog(roomId) { /* (Sama seperti sebelumnya) */ }
-        function showReportedChat(violationIndex) { /* (Sama seperti sebelumnya) */ }
+        async function showChatLog(roomId) {
+            document.getElementById('modal-room-id').textContent = `Isi Chat: ${roomId}`;
+            const contentDiv = document.getElementById('modal-chat-content');
+            contentDiv.innerHTML = 'Memuat chat...';
+            modal.classList.remove('hidden');
+            try {
+                const response = await fetch(`/api/chatlog/${roomId}`);
+                const logData = await response.json();
+                let chatHTML = '<div class="space-y-2 text-sm">';
+                logData.forEach(chat => { chatHTML += `<div><span class="font-bold text-sky-400">${chat.nickname}:</span><span class="text-slate-300"> ${chat.message}</span><span class="text-xs text-slate-500 float-right">${chat.timestamp.split(' ')[1]}</span></div>`; });
+                chatHTML += '</div>';
+                contentDiv.innerHTML = chatHTML;
+            } catch (error) { contentDiv.innerHTML = 'Gagal memuat log chat.'; }
+        }
+
+        function showReportedChat(violationIndex) {
+            const violation = cachedData.violations.slice().reverse()[violationIndex];
+            document.getElementById('modal-room-id').textContent = `Bukti Laporan: ${violation.roomId}`;
+            const contentDiv = document.getElementById('modal-chat-content');
+            let chatHTML = '<div class="space-y-2 text-sm">';
+            (violation.chatHistory || []).forEach(chat => {
+                let colorClass = 'text-slate-300';
+                if (violation.reporter && chat.userId === violation.reporter.id) colorClass = 'text-green-400';
+                if (violation.reported && chat.userId === violation.reported.id) colorClass = 'text-red-400';
+                chatHTML += `<div><span class="font-bold ${colorClass}">${chat.nickname}:</span> ${chat.message}</div>`;
+            });
+            chatHTML += '</div>';
+            contentDiv.innerHTML = chatHTML;
+            modal.classList.remove('hidden');
+        }
+
         function closeModal() { modal.classList.add('hidden'); }
+
         async function updateAllData() {
             try {
-                const [statusResponse, configResponse, broadcastResponse] = await Promise.all([ fetch('/api/status'), fetch('/api/config'), fetch('/api/broadcast-status') ]);
-                if (!statusResponse.ok || !configResponse.ok) throw new Error('Gagal mengambil data.');
+                const [statusResponse, configResponse] = await Promise.all([ fetch('/api/status'), fetch('/api/config') ]);
+                if (!statusResponse.ok || !configResponse.ok) throw new Error('Gagal mengambil data dari server.');
                 const statusData = await statusResponse.json();
                 const configData = await configResponse.json();
-                const broadcastData = await broadcastResponse.json();
-                const data = { ...statusData, config: configData, broadcast: broadcastData };
+                const data = { ...statusData, config: configData };
 
                 if (JSON.stringify(data) !== JSON.stringify(cachedData)) {
                     cachedData = data;
                     const usersArray = data.users;
                     document.getElementById('header-bot-name').textContent = `🛡️ Admin Dashboard (${data.config.botName})`;
+                    renderStatCards(data);
                     renderAnonStatus(data);
                     renderUserTable(usersArray);
+                    // Panggil renderRankTable di sini jika Anda memutuskan untuk menggunakannya lagi
                     renderViolationTable(data.violations);
                     renderSettingsForm(data.config);
                 }
-                renderBroadcastStatus(data.broadcast);
                 document.getElementById('status-text').textContent = `Data diperbarui pada: ${new Date().toLocaleTimeString('id-ID')}`;
-            } catch (error) { console.error("Gagal update data:", error); document.getElementById('status-text').textContent = "Gagal memuat data."; }
+            } catch (error) {
+                console.error("Gagal update data:", error);
+                document.getElementById('status-text').textContent = "Gagal memuat data.";
+            }
         };
-        const broadcastForm = document.getElementById('broadcast-form');
-        broadcastForm.addEventListener('submit', async(e) => { /* (Sama seperti sebelumnya) */ });
-        function renderBroadcastStatus(status) { /* (Sama seperti sebelumnya) */ }
-        updateAllData(); setInterval(updateAllData, updateInterval);
+        
+        updateAllData();
+        setInterval(updateAllData, updateInterval);
     </script>
 </body>
 </html>
