@@ -181,11 +181,17 @@
 
         async function updateAllData() {
             try {
-                const [statusResponse, configResponse] = await Promise.all([ fetch('/api/status'), fetch('/api/config') ]);
+                const [statusResponse, configResponse, broadcastResponse] = await Promise.all([
+                    fetch('/api/status'),
+                    fetch('/api/config'),
+                    fetch('/api/broadcast-status')
+                ]);
                 if (!statusResponse.ok || !configResponse.ok) throw new Error('Gagal mengambil data dari server.');
+
                 const statusData = await statusResponse.json();
                 const configData = await configResponse.json();
-                const data = { ...statusData, config: configData };
+                const broadcastData = await broadcastResponse.json();
+                const data = { ...statusData, config: configData, broadcast: broadcastData };
 
                 if (JSON.stringify(data) !== JSON.stringify(cachedData)) {
                     cachedData = data;
@@ -194,19 +200,79 @@
                     renderStatCards(data);
                     renderAnonStatus(data);
                     renderUserTable(usersArray);
-                    // Panggil renderRankTable di sini jika Anda memutuskan untuk menggunakannya lagi
                     renderViolationTable(data.violations);
                     renderSettingsForm(data.config);
                 }
+                
+                renderBroadcastStatus(data.broadcast);
                 document.getElementById('status-text').textContent = `Data diperbarui pada: ${new Date().toLocaleTimeString('id-ID')}`;
             } catch (error) {
                 console.error("Gagal update data:", error);
                 document.getElementById('status-text').textContent = "Gagal memuat data.";
             }
         };
+
+        const broadcastForm = document.getElementById('broadcast-form');
+        const broadcastButton = document.getElementById('broadcast-button');
+        const buttonText = document.getElementById('button-text');
+        const buttonSpinner = document.getElementById('button-spinner');
+        const broadcastStatusDiv = document.getElementById('broadcast-status');
+        const progressSection = document.getElementById('broadcast-progress-section');
+        const progressBar = document.getElementById('progress-bar');
+        const progressText = document.getElementById('progress-text');
+        
+        broadcastForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const message = document.getElementById('broadcast-message').value;
+            if (!message || message.trim() === '') return;
+            
+            broadcastStatusDiv.textContent = '';
+            buttonText.textContent = 'Mengirim...';
+            buttonSpinner.classList.remove('hidden');
+            broadcastButton.disabled = true;
+
+            try {
+                const response = await fetch('/broadcast', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: `message=${encodeURIComponent(message)}`
+                });
+                const resultText = await response.text();
+                broadcastStatusDiv.textContent = resultText;
+                document.getElementById('broadcast-message').value = '';
+                setTimeout(() => { broadcastStatusDiv.textContent = ''; }, 7000);
+            } catch (error) {
+                broadcastStatusDiv.textContent = "Gagal mengirim broadcast.";
+            } finally {
+                // Biarkan updateBroadcastStatus yang mengembalikan kondisi tombol
+            }
+        });
+
+        function renderBroadcastStatus(status) {
+            if (status.isRunning) {
+                progressSection.classList.remove('hidden');
+                const percent = status.total > 0 ? (status.progress / status.total) * 100 : 0;
+                progressBar.style.width = `${percent}%`;
+                progressText.textContent = `Mengirim ke ${status.currentUser} (${status.progress}/${status.total})...`;
+                buttonText.textContent = 'Mengirim...';
+                buttonSpinner.classList.remove('hidden');
+                broadcastButton.disabled = true;
+            } else {
+                 if (cachedData?.broadcast?.isRunning && !status.isRunning) {
+                     progressText.textContent = `Broadcast Selesai! Terkirim ke ${cachedData.broadcast.total} pengguna.`;
+                     progressBar.style.width = `100%`;
+                 } else if (!cachedData?.broadcast?.isRunning) {
+                    progressSection.classList.add('hidden');
+                 }
+                buttonText.textContent = 'Kirim ke Semua Pengguna Aktif';
+                buttonSpinner.classList.add('hidden');
+                broadcastButton.disabled = false;
+            }
+        }
         
         updateAllData();
         setInterval(updateAllData, updateInterval);
+        setInterval(updateBroadcastStatus, 2000); // Cek status broadcast lebih sering
     </script>
 </body>
 </html>
