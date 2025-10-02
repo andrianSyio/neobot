@@ -1,13 +1,12 @@
 {
   "name": "bot-wa-railway",
   "version": "1.0.0",
-  "description": "Bot WhatsApp dengan game, anonymous chat, dan dashboard admin",
+  "description": "Bot WhatsApp dengan anonymous chat dan dashboard admin",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "@google/generative-ai": "^0.2.1",
     "ejs": "^3.1.9",
     "express": "^4.18.2",
     "dotenv": "^16.4.5",
