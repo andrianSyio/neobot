@@ -33,7 +33,6 @@ let broadcastStatus = { isRunning: false, progress: 0, total: 0, currentUser: ''
 
 app.use(express.urlencoded({ extended: true }));
 
-
 // =================================================================
 //                          FUNGSI HELPER
 // =================================================================
@@ -50,12 +49,17 @@ function loadDatabase() {
         if (fs.existsSync(DB_FILE)) {
             const data = fs.readFileSync(DB_FILE, 'utf-8');
             db = data.length > 0 ? JSON.parse(data) : {};
-        } else { fs.writeFileSync(DB_FILE, JSON.stringify({})); db = {}; }
+        } else {
+            fs.writeFileSync(DB_FILE, JSON.stringify({}));
+            db = {};
+        }
     } catch (error) { customLog(`Gagal memuat database: ${error.message}`); db = {}; }
 }
 
 function saveDatabase() {
-    try { fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2)); } catch (error) { customLog(`Gagal menyimpan database: ${error.message}`); }
+    try {
+        fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
+    } catch (error) { customLog(`Gagal menyimpan database: ${error.message}`); }
 }
 
 function loadViolations() {
@@ -63,17 +67,27 @@ function loadViolations() {
         if (fs.existsSync(VIOLATIONS_FILE)) {
             const data = fs.readFileSync(VIOLATIONS_FILE, 'utf-8');
             violations = data.length > 0 ? JSON.parse(data) : [];
-        } else { fs.writeFileSync(VIOLATIONS_FILE, '[]'); violations = []; }
+        } else {
+            fs.writeFileSync(VIOLATIONS_FILE, '[]');
+            violations = [];
+        }
     } catch (error) { customLog(`Gagal memuat violations: ${error.message}`); violations = []; }
 }
 
 function saveViolations() {
-    try { fs.writeFileSync(VIOLATIONS_FILE, JSON.stringify(violations, null, 2)); } catch (error) { customLog(`Gagal menyimpan violations: ${error.message}`); }
+    try {
+        fs.writeFileSync(VIOLATIONS_FILE, JSON.stringify(violations, null, 2));
+    } catch (error) { customLog(`Gagal menyimpan violations: ${error.message}`); }
 }
 
 function getUser(userId) {
     if (!db[userId]) {
-        db[userId] = { nickname: userId.split('@')[0], role: 'user', isBanned: false };
+        db[userId] = {
+            nickname: userId.split('@')[0],
+            role: 'user',
+            isBanned: false,
+            hasSeenRules: false
+        };
         saveDatabase();
     }
     return db[userId];
@@ -92,15 +106,23 @@ function logChatMessage(roomId, userId, message, mediaType = 'text') {
     const logPath = `${LOG_DIR}/${roomId}.json`;
     const user = getUser(userId);
     const timestamp = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
-    const logEntry = { timestamp, userId, nickname: user.nickname, message: mediaType === 'text' ? message : `[Media: ${mediaType}]` };
+    const logEntry = {
+        timestamp,
+        userId,
+        nickname: user.nickname,
+        message: mediaType === 'text' ? message : `[Media: ${mediaType}]`
+    };
     try {
         let logs = [];
-        if (fs.existsSync(logPath)) { logs = JSON.parse(fs.readFileSync(logPath, 'utf-8')); }
+        if (fs.existsSync(logPath)) {
+            logs = JSON.parse(fs.readFileSync(logPath, 'utf-8'));
+        }
         logs.push(logEntry);
         fs.writeFileSync(logPath, JSON.stringify(logs, null, 2));
-    } catch (error) { customLog(`Gagal menulis log chat untuk room ${roomId}: ${error.message}`); }
+    } catch (error) {
+        customLog(`Gagal menulis log chat untuk room ${roomId}: ${error.message}`);
+    }
 }
-
 
 // =================================================================
 //                      PENGATURAN WEB SERVER & RUTE
@@ -112,18 +134,34 @@ app.get('/dashboard', (req, res) => res.render('dashboard'));
 app.get('/api/status', (req, res) => {
     loadDatabase();
     loadViolations();
-    const usersArray = Object.keys(db).map(key => ({ id: key, ...db[key] }));
+    const usersArray = Object.keys(db).map(key => ({
+        id: key,
+        ...db[key]
+    }));
     const waitingUsers = waitingQueue.map(id => getUser(id));
     const activePairs = [];
     const processed = new Set();
     Object.keys(activeChats).forEach(userId => {
         if (!processed.has(userId)) {
             const partnerId = activeChats[userId].partner;
-            activePairs.push({ roomId: activeChats[userId].roomId, user1: getUser(userId)?.nickname, user2: getUser(partnerId)?.nickname });
-            processed.add(userId); processed.add(partnerId);
+            activePairs.push({
+                roomId: activeChats[userId].roomId,
+                user1: getUser(userId)?.nickname,
+                user2: getUser(partnerId)?.nickname
+            });
+            processed.add(userId);
+            processed.add(partnerId);
         }
     });
-    res.json({ users: usersArray, waiting: waitingUsers, active: activePairs, violations, botStatus: botStatus, qrCode: qrCodeDataUrl, serverLogs: serverLogs });
+    res.json({
+        users: usersArray,
+        waiting: waitingUsers,
+        active: activePairs,
+        violations,
+        botStatus: botStatus,
+        qrCode: qrCodeDataUrl,
+        serverLogs: serverLogs
+    });
 });
 
 app.get('/api/broadcast-status', (req, res) => {
@@ -137,25 +175,52 @@ app.get('/api/chatlog/:roomId', (req, res) => {
         if (fs.existsSync(logPath)) {
             const data = fs.readFileSync(logPath, 'utf-8');
             res.json(JSON.parse(data));
-        } else { res.status(404).json({ error: 'Log tidak ditemukan' }); }
-    } catch (error) { res.status(500).json({ error: 'Gagal membaca log' }); }
+        } else {
+            res.status(404).json({
+                error: 'Log tidak ditemukan'
+            });
+        }
+    } catch (error) {
+        res.status(500).json({
+            error: 'Gagal membaca log'
+        });
+    }
 });
 
 app.post('/toggle-ban', (req, res) => {
     loadDatabase();
-    const { userId } = req.body;
+    const {
+        userId
+    } = req.body;
     const user = getUser(userId);
-    if (user) { user.isBanned = !user.isBanned; saveDatabase(); }
+    if (user) {
+        user.isBanned = !user.isBanned;
+        saveDatabase();
+    }
     res.redirect('/dashboard');
 });
 
 app.post('/broadcast', (req, res) => {
-    const { message } = req.body;
-    if (!message) { return res.status(400).send("Pesan tidak boleh kosong."); }
-    if (broadcastStatus.isRunning) { return res.status(400).send("Broadcast lain sedang berjalan."); }
+    const {
+        message
+    } = req.body;
+    if (!message) {
+        return res.status(400).send("Pesan tidak boleh kosong.");
+    }
+    if (broadcastStatus.isRunning) {
+        return res.status(400).send("Broadcast lain sedang berjalan.");
+    }
     loadDatabase();
-    const allUserIds = Object.keys(db).filter(id => { const user = db[id]; return user && !user.isBanned && user.role !== 'admin'; });
-    broadcastStatus = { isRunning: true, progress: 0, total: allUserIds.length, currentUser: '' };
+    const allUserIds = Object.keys(db).filter(id => {
+        const user = db[id];
+        return user && !user.isBanned && user.role !== 'admin';
+    });
+    broadcastStatus = {
+        isRunning: true,
+        progress: 0,
+        total: allUserIds.length,
+        currentUser: ''
+    };
     res.status(200).send("Broadcast dimulai! Pantau progres di dashboard.");
     (async () => {
         for (let i = 0; i < allUserIds.length; i++) {
@@ -163,7 +228,11 @@ app.post('/broadcast', (req, res) => {
             const user = getUser(userId);
             broadcastStatus.currentUser = user.nickname;
             broadcastStatus.progress = i + 1;
-            try { await client.sendMessage(userId, message); } catch (error) { customLog(`[BROADCAST] Gagal mengirim ke ${userId}: ${error.message}`); }
+            try {
+                await client.sendMessage(userId, message);
+            } catch (error) {
+                customLog(`[BROADCAST] Gagal mengirim ke ${userId}: ${error.message}`);
+            }
             const randomDelay = Math.floor(Math.random() * 8000) + 3000;
             await new Promise(resolve => setTimeout(resolve, randomDelay));
         }
@@ -182,21 +251,30 @@ client.on('message', async (message) => {
     const user_id = message.from;
     const user = getUser(user_id);
 
-    if (user.isBanned) return;
+    // PERBAIKAN: Logika baru untuk pesan banned
+    if (user.isBanned) {
+        const bannedMessage = `Waduh, ${user.nickname}. Sepertinya akunmu sedang ditangguhkan (di-banned) karena melanggar peraturan.\n\nUntuk diskusi lebih lanjut mengenai pembukaan blokir, silakan hubungi admin di nomor 0895322080063 ya.`;
+        return message.reply(bannedMessage);
+    }
 
     if (activeChats[user_id]) {
-        const { partner: partner_id, roomId } = activeChats[user_id];
+        const {
+            partner: partner_id,
+            roomId
+        } = activeChats[user_id];
         if (lowerCaseText === '!stop' || lowerCaseText === '!skip') {
             delete activeChats[user_id];
             delete activeChats[partner_id];
-            await message.reply('Sesi chat diakhiri. Ketik *!chat* untuk mencari partner baru.');
+            await message.reply('Sesi chat diakhiri. Semoga obrolannya menyenangkan! Ketik *!chat* untuk mencari partner baru.');
             await client.sendMessage(partner_id, 'Yah, partnermu telah mengakhiri sesi. Jangan sedih, yuk cari lagi dengan ketik *!chat*! 😊');
             return;
         }
         if (lowerCaseText === '!lapor') {
             const reporter = getUser(user_id);
             const reported = getUser(partner_id);
-            const timestamp = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
+            const timestamp = new Date().toLocaleString('id-ID', {
+                timeZone: 'Asia/Jakarta'
+            });
             let chatHistory = [];
             const logPath = `${LOG_DIR}/${roomId}.json`;
             try {
@@ -204,8 +282,23 @@ client.on('message', async (message) => {
                     const logContent = fs.readFileSync(logPath, 'utf-8');
                     chatHistory = JSON.parse(logContent).slice(-10);
                 }
-            } catch (error) { customLog(`Gagal membaca log untuk laporan: ${error.message}`); }
-            violations.push({ timestamp, type: 'Laporan Pengguna', roomId, reporter: { id: user_id, nickname: reporter.nickname }, reported: { id: partner_id, nickname: reported.nickname }, chatHistory });
+            } catch (error) {
+                customLog(`Gagal membaca log untuk laporan: ${error.message}`);
+            }
+            violations.push({
+                timestamp,
+                type: 'Laporan Pengguna',
+                roomId,
+                reporter: {
+                    id: user_id,
+                    nickname: reporter.nickname
+                },
+                reported: {
+                    id: partner_id,
+                    nickname: reported.nickname
+                },
+                chatHistory
+            });
             saveViolations();
             delete activeChats[user_id];
             delete activeChats[partner_id];
@@ -218,32 +311,56 @@ client.on('message', async (message) => {
             try {
                 const media = await message.downloadMedia();
                 logChatMessage(roomId, user_id, '', message.type);
-                await client.sendMessage(partner_id, media, { caption: message.type === 'image' ? text : undefined });
-            } catch (error) { message.reply('Duh, maaf, gagal meneruskan media.'); }
+                await client.sendMessage(partner_id, media, {
+                    caption: message.type === 'image' ? text : undefined
+                });
+            } catch (error) {
+                message.reply('Duh, maaf, gagal meneruskan media.');
+            }
             return;
         }
         if (checkProfanity(text)) {
-            const timestamp = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
-            violations.push({ timestamp, type: 'Kata Kasar', userId: user_id, nickname: user.nickname, roomId, message: text });
+            const timestamp = new Date().toLocaleString('id-ID', {
+                timeZone: 'Asia/Jakarta'
+            });
+            violations.push({
+                timestamp,
+                type: 'Kata Kasar',
+                userId: user_id,
+                nickname: user.nickname,
+                roomId,
+                message: text
+            });
             saveViolations();
             return message.reply('Eits, bahasanya dijaga ya. Pesanmu nggak aku kirim dan aku catat sebagai pelanggaran.');
         }
-        logChatMessage(roomId, user_id, text);
-        setTimeout(() => { client.sendMessage(partner_id, text); }, 1500);
+        if (text) {
+            logChatMessage(roomId, user_id, text);
+            setTimeout(() => {
+                client.sendMessage(partner_id, text);
+            }, 1500);
+        }
         return;
     }
 
     const command = lowerCaseText.split(' ')[0];
     if (['halo', 'p', 'salam', '!menu'].includes(command)) {
-        const menuText = `Hai *${user.nickname}*! 👋 Selamat datang di bot AnonyChat & Stiker.\n\n*Fitur yang tersedia:*\n\n1.  *!chat*\n    _Mencari partner ngobrol acak._\n\n2.  *!stop* / *!skip*\n    _Menghentikan sesi chat atau pencarian._\n\n3.  *!lapor*\n    _Melaporkan partner chat Anda saat ini._\n\n4.  *!stiker*\n    _Kirim gambar dengan caption ini untuk jadi stiker._`;
+        // Logika untuk menampilkan peraturan saat pertama kali
+        if (!user.hasSeenRules) {
+            const rulesText = `*Selamat Datang di AnonyChat Bot!* 👋\n\nSebelum mulai, harap baca dan patuhi peraturan berikut:\n\n1.  *Dilarang Keras* berkata kasar, menghina SARA, atau menyebarkan ujaran kebencian.\n2.  *Dilarang Spamming* atau mengirim pesan berlebihan (flood).\n3.  *Jaga Privasi!* Jangan membagikan informasi pribadi (nomor HP, medsos, dll).\n4.  Gunakan bot dengan bijak. Admin dapat mem-banned pengguna yang melanggar aturan.\n\nSelamat bersenang-senang!`;
+            await message.reply(rulesText);
+            user.hasSeenRules = true;
+            saveDatabase();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+
+        const menuText = `Hai *${user.nickname}*! 👋 Selamat datang di bot AnonyChat & Stiker.\n\n*Fitur yang tersedia:*\n\n- *!chat*\n    _Mencari partner ngobrol acak._\n\n- *!stop* / *!skip*\n    _Menghentikan sesi chat atau pencarian._\n\n- *!lapor*\n    _Melaporkan partner chat Anda saat ini._\n\n- *!stiker*\n    _Kirim gambar dengan caption ini untuk jadi stiker._`;
         return message.reply(menuText);
     }
-    
+
     switch (command) {
         case '!chat':
             if (waitingQueue.includes(user_id)) return message.reply('Tenang, kamu sudah dalam antrian kok. Aku lagi cariin partner yang pas, sabar ya!');
-            
-            // PERBAIKAN: Logika findPartner dikembalikan ke sini
             if (waitingQueue.length > 0) {
                 const partner_id = waitingQueue.shift();
                 if (partner_id === user_id) {
@@ -251,8 +368,14 @@ client.on('message', async (message) => {
                     return message.reply('Ups, hampir dapat diri sendiri. Mencari partner lain...');
                 }
                 const roomId = generateRoomId();
-                activeChats[user_id] = { partner: partner_id, roomId };
-                activeChats[partner_id] = { partner: user_id, roomId };
+                activeChats[user_id] = {
+                    partner: partner_id,
+                    roomId
+                };
+                activeChats[partner_id] = {
+                    partner: user_id,
+                    roomId
+                };
                 fs.writeFileSync(`${LOG_DIR}/${roomId}.json`, '[]');
                 await client.sendMessage(user_id, `Asiik, partner ditemukan! Selamat ngobrol ya!\n\nKalau sudah selesai, jangan lupa ketik *!stop* atau *!lapor*.`);
                 await client.sendMessage(partner_id, `Asiik, partner ditemukan! Selamat ngobrol ya!\n\nKalau sudah selesai, jangan lupa ketik *!stop* atau *!lapor*.`);
@@ -270,11 +393,15 @@ client.on('message', async (message) => {
             }
             break;
         case '!stiker':
-             if (message.hasMedia) {
+            if (message.hasMedia) {
                 message.reply('Sip, stikernya lagi dibikin nih...');
                 try {
                     const media = await message.downloadMedia();
-                    await client.sendMessage(message.from, media, { sendMediaAsSticker: true, stickerAuthor: "AnonyChat Bot", stickerName: `Stiker by ${user.nickname}` });
+                    await client.sendMessage(message.from, media, {
+                        sendMediaAsSticker: true,
+                        stickerAuthor: "AnonyChat Bot",
+                        stickerName: `Stiker by ${user.nickname}`
+                    });
                 } catch (error) {
                     message.reply('Duh, maaf, sepertinya ada masalah saat membuat stiker.');
                 }
@@ -284,6 +411,7 @@ client.on('message', async (message) => {
             break;
     }
 });
+
 
 // =================================================================
 //                      MENJALANKAN SERVER & BOT
