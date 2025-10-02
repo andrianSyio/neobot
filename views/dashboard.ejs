@@ -147,8 +147,8 @@
                             <textarea id="welcome-message" rows="3" class="w-full text-sm bg-white dark:bg-slate-900/50 border border-slate-300 dark:border-slate-600 rounded-lg p-2"></textarea>
                         </div>
                          <div>
-                            <label for="rules-message" class="block text-sm font-medium mb-1">Pesan Aturan (!rules)</label>
-                            <textarea id="rules-message" rows="3" class="w-full text-sm bg-white dark:bg-slate-900/50 border border-slate-300 dark:border-slate-600 rounded-lg p-2"></textarea>
+                            <label for="menu-message" class="block text-sm font-medium mb-1">Pesan Menu</label>
+                            <textarea id="menu-message" rows="3" class="w-full text-sm bg-white dark:bg-slate-900/50 border border-slate-300 dark:border-slate-600 rounded-lg p-2"></textarea>
                         </div>
                         <button type="submit" class="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-700">Simpan Pesan</button>
                     </form>
@@ -271,12 +271,13 @@
 
         document.getElementById('messages-form').addEventListener('submit', async (e) => {
             e.preventDefault();
+            // PERBAIKAN: Mengirim 'menu' bukan 'rules'
             await fetch('/api/settings/messages', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     welcome: document.getElementById('welcome-message').value,
-                    rules: document.getElementById('rules-message').value
+                    menu: document.getElementById('menu-message').value
                 })
             });
             alert('Pesan berhasil disimpan!');
@@ -287,6 +288,7 @@
             const input = document.getElementById('new-badword');
             const word = input.value.trim();
             if(!word) return;
+            // PERBAIKAN: Body yang dikirim sudah benar untuk endpoint POST yang baru
             await fetch('/api/settings/badwords', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -425,7 +427,8 @@
         if(!settings) return;
         document.getElementById('maintenance-toggle').checked = settings.maintenanceMode;
         document.getElementById('welcome-message').value = settings.messages.welcome;
-        document.getElementById('rules-message').value = settings.messages.rules;
+        // PERBAIKAN: Mengisi textarea 'menu-message'
+        document.getElementById('menu-message').value = settings.messages.menu;
         const listContainer = document.getElementById('badwords-list');
         listContainer.innerHTML = settings.badwords.map(word => `<div class="flex justify-between items-center bg-slate-200 dark:bg-slate-800/80 p-2 rounded text-sm"><span>${word}</span><button onclick="deleteBadword('${word}')" class="text-red-500 font-bold hover:text-red-700">×</button></div>`).join('');
     }
@@ -433,6 +436,7 @@
     // --- FUNGSI AKSI & MODAL ---
     async function deleteBadword(word) {
         if (!confirm(`Yakin ingin menghapus kata "${word}"?`)) return;
+        // PERBAIKAN: Metode diubah menjadi DELETE dan URL disesuaikan
         await fetch('/api/settings/badwords', {
             method: 'DELETE',
             headers: { 'Content-Type': 'application/json' },
@@ -443,6 +447,7 @@
     
     async function warnUser(userId) {
         if (!confirm(`Kirim peringatan ke pengguna ini?`)) return;
+        // PERBAIKAN: URL disesuaikan dengan backend
         await fetch('/api/warn-user', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -463,6 +468,7 @@
         contentEl.innerHTML = 'Memuat log...';
 
         try {
+            // PERBAIKAN: URL disesuaikan dengan backend
             const response = await fetch(`/api/chat-log/${roomId}`);
             const logs = await response.json();
             if(!logs || logs.length === 0) {
@@ -471,7 +477,7 @@
             }
             contentEl.innerHTML = logs.map(log => {
                 const isReported = highlightedUserId && log.senderId === highlightedUserId;
-                const alignment = log.senderNickname === 'BOT' ? 'text-center' : (log.isSender1 ? 'text-left' : 'text-right');
+                const alignment = log.isSender1 ? 'text-left' : 'text-right';
                 const bgColor = isReported ? 'bg-rose-500/20' : 'bg-slate-200 dark:bg-slate-700';
                 return `<div class="mb-2 ${alignment}">
                     <div class="inline-block p-2 rounded-lg ${bgColor}">
@@ -494,15 +500,18 @@
         contentEl.innerHTML = 'Memuat detail pengguna...';
         
         try {
+            // PERBAIKAN: URL disesuaikan dengan backend
             const response = await fetch(`/api/user-detail/${userId}`);
-            const user = await response.json();
+            const data = await response.json();
+            const user = data.user;
+
             document.getElementById('user-detail-name').textContent = user.nickname;
             contentEl.innerHTML = `
                 <div class="space-y-2 text-sm">
                     <p><strong>ID:</strong> ${user.id}</p>
                     <p><strong>Status:</strong> ${user.isBanned ? 'Banned' : 'Aktif'}</p>
-                    <p><strong>Jumlah Peringatan:</strong> ${user.warnings}</p>
-                    <p><strong>Bergabung Pada:</strong> ${new Date(user.joinedAt).toLocaleString('id-ID')}</p>
+                    <p><strong>Jumlah Peringatan:</strong> ${user.warnings || 0}</p>
+                    <p><strong>Bergabung Pada:</strong> ${new Date(user.joinDate).toLocaleString('id-ID')}</p>
                     <p><strong>Terakhir Aktif:</strong> ${new Date(user.lastActive).toLocaleString('id-ID')}</p>
                 </div>
             `;
