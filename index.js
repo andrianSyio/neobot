@@ -7,7 +7,8 @@ const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const fs = require('fs');
 const express = require('express');
 const { exec } = require('child_process');
-const cors = require('cors'); // Penting untuk Railway
+const cors = require('cors');
+const path = require('path'); // Modul path untuk menangani file path dengan aman
 
 // Inisialisasi Klien, dan Web Server
 const client = new Client({
@@ -15,10 +16,10 @@ const client = new Client({
     puppeteer: { args: ['--no-sandbox', '--disable-setuid-sandbox'] }
 });
 const app = express();
-const port = process.env.PORT || 3000; // Wajib untuk Railway
+const port = process.env.PORT || 3000;
 
 // =================================================================
-//                    PENGATURAN & VARIABEL GLOBAL
+//                   PENGATURAN & VARIABEL GLOBAL
 // =================================================================
 const DB_FILE = './database.json';
 const VIOLATIONS_FILE = './violations.json';
@@ -38,13 +39,13 @@ let serverLogs = [];
 let settings = {};
 
 // Middleware untuk membaca JSON dan form data dari dashboard
-app.use(cors()); // Wajib untuk Railway agar dashboard bisa mengambil data
+app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 
 // =================================================================
-//                         FUNGSI HELPER
+//                          FUNGSI HELPER
 // =================================================================
 
 function customLog(message) {
@@ -95,6 +96,7 @@ function getUser(userId) {
         db[userId] = {
             nickname: userId.split('@')[0],
             joinDate: new Date().toISOString(),
+            lastActive: new Date().toISOString(),
             chatCount: 0,
             warnings: 0,
             isBanned: false,
@@ -102,6 +104,7 @@ function getUser(userId) {
         };
         saveData(DB_FILE, db);
     }
+    db[userId].lastActive = new Date().toISOString(); // Selalu update last active
     return db[userId];
 }
 
@@ -115,14 +118,17 @@ function checkProfanity(message) {
 }
 
 function logChatMessage(roomId, userId, message, mediaType = 'text') {
-    const logPath = `${LOG_DIR}/${roomId}.json`;
+    const logPath = path.join(LOG_DIR, `${roomId}.json`);
     const user = getUser(userId);
+    const isSender1 = activeChats[userId]?.user1 === userId;
+    
     const timestamp = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
     const logEntry = {
         timestamp,
-        userId,
-        nickname: user.nickname,
-        message: mediaType === 'text' ? message : `[Media: ${mediaType}]`
+        senderId: userId,
+        senderNickname: user.nickname,
+        message: mediaType === 'text' ? message : `[Media: ${mediaType}]`,
+        isSender1 // Menandai siapa pengirimnya untuk alignment di UI
     };
     try {
         let logs = fs.existsSync(logPath) ? JSON.parse(fs.readFileSync(logPath, 'utf-8')) : [];
@@ -134,7 +140,7 @@ function logChatMessage(roomId, userId, message, mediaType = 'text') {
 }
 
 // =================================================================
-//                    PENGATURAN WEB SERVER & RUTE
+//                   PENGATURAN WEB SERVER & RUTE
 // =================================================================
 app.set('view engine', 'ejs');
 app.get('/', (req, res) => res.redirect('/dashboard'));
@@ -145,13 +151,13 @@ app.get('/dashboard', (req, res) => res.render('dashboard'));
 app.get('/api/status', (req, res) => {
     const metrics = {
         totalUsers: Object.keys(db).length,
-        activeToday: Object.values(db).filter(u => new Date(u.joinDate).toDateString() === new Date().toDateString()).length,
-        totalChats24h: violations.length,
+        activeToday: Object.values(db).filter(u => new Date(u.lastActive).toDateString() === new Date().toDateString()).length,
+        totalChats24h: violations.filter(v => new Date(v.timestamp.split(',')[0].split('/').reverse().join('-')) > new Date(Date.now() - 24 * 60 * 60 * 1000)).length,
         banned: Object.values(db).filter(u => u.isBanned).length
     };
     const analytics = {
-        userGrowth: { labels: ['Day 1', 'Day 2'], data: [10, 15] },
-        peakHours: { labels: ['00:00', '03:00'], data: [5, 12] },
+        userGrowth: { labels: ['Day 1', 'Day 2'], data: [10, 15] }, // Data dummy
+        peakHours: { labels: ['00:00', '03:00'], data: [5, 12] }, // Data dummy
         violationTypes: { labels: ['Kata Kasar', 'Laporan'], data: [violations.filter(v=>v.type === 'Kata Kasar').length, violations.filter(v=>v.type !== 'Kata Kasar').length] }
     };
 
@@ -177,11 +183,13 @@ app.get('/api/status', (req, res) => {
     });
 });
 
-app.get('/api/chatlog/:roomId', (req, res) => {
+// PERBAIKAN: Endpoint diubah menjadi /api/chat-log/ dan mengirim response JSON
+app.get('/api/chat-log/:roomId', (req, res) => {
     const roomId = req.params.roomId.replace(/[^a-zA-Z0-9]/g, '');
-    const logPath = `${LOG_DIR}/${roomId}.json`;
+    const logPath = path.join(__dirname, LOG_DIR, `${roomId}.json`);
     if (fs.existsSync(logPath)) {
-        res.sendFile(__dirname + '/' + logPath);
+        const logData = JSON.parse(fs.readFileSync(logPath, 'utf-8'));
+        res.json(logData);
     } else {
         res.status(404).json({ error: 'Log tidak ditemukan' });
     }
@@ -228,33 +236,49 @@ app.post('/api/settings/maintenance', (req, res) => {
     res.json({ success: true, message: `Mode perbaikan ${enabled ? 'diaktifkan' : 'dinonaktifkan'}.` });
 });
 
+// PERBAIKAN: Mengubah 'rules' menjadi 'menu' agar sesuai dengan data yang dipakai
 app.post('/api/settings/messages', (req, res) => {
-    const { welcome, rules } = req.body;
-    settings.messages.welcome = welcome;
-    settings.messages.rules = rules;
+    const { welcome, menu } = req.body;
+    if(welcome) settings.messages.welcome = welcome;
+    if(menu) settings.messages.menu = menu; // Menggunakan 'menu'
     saveData(SETTINGS_FILE, settings);
     res.json({ success: true, message: "Pesan berhasil disimpan." });
 });
 
+// PERBAIKAN: Endpoint POST disederhanakan untuk menambah kata
 app.post('/api/settings/badwords', (req, res) => {
-    const { action, word } = req.body;
-    if (action === 'add' && word && !settings.badwords.includes(word)) {
+    const { word } = req.body;
+    if (word && !settings.badwords.includes(word.toLowerCase())) {
         settings.badwords.push(word.toLowerCase());
-    } else if (action === 'remove' && word) {
-        settings.badwords = settings.badwords.filter(bw => bw !== word);
+        saveData(SETTINGS_FILE, settings);
     }
-    saveData(SETTINGS_FILE, settings);
     res.json({ success: true, badwords: settings.badwords });
 });
 
-app.get('/api/users/detail/:userId', (req, res) => {
-    const user = db[req.params.userId];
-    if (!user) return res.status(404).json({ error: "User tidak ditemukan" });
-    const userViolations = violations.filter(v => v.userId === req.params.userId || (v.reporter && v.reporter.id === req.params.userId));
-    res.json({ user, violations: userViolations });
+// PERBAIKAN: Endpoint DELETE dibuat khusus untuk menghapus kata
+app.delete('/api/settings/badwords', (req, res) => {
+    const { word } = req.body;
+    if (word) {
+        settings.badwords = settings.badwords.filter(bw => bw !== word.toLowerCase());
+        saveData(SETTINGS_FILE, settings);
+    }
+    res.json({ success: true, badwords: settings.badwords });
 });
 
-app.post('/api/users/warn', (req, res) => {
+// PERBAIKAN: Endpoint diubah menjadi /api/user-detail/
+app.get('/api/user-detail/:userId', (req, res) => {
+    const userId = req.params.userId;
+    const user = db[userId];
+    if (!user) return res.status(404).json({ error: "User tidak ditemukan" });
+    
+    const userWithId = { id: userId, ...user };
+    
+    const userViolations = violations.filter(v => (v.reported && v.reported.id === userId) || (v.reporter && v.reporter.id === userId));
+    res.json({ user: userWithId, violations: userViolations });
+});
+
+// PERBAIKAN: Endpoint diubah menjadi /api/warn-user
+app.post('/api/warn-user', (req, res) => {
     const { userId } = req.body;
     if (db[userId]) {
         db[userId].warnings = (db[userId].warnings || 0) + 1;
@@ -267,10 +291,12 @@ app.post('/api/users/warn', (req, res) => {
 });
 
 // =================================================================
-//                    LOGIKA UTAMA BOT WHATSAPP
+//                     LOGIKA UTAMA BOT WHATSAPP
 // =================================================================
 client.on('message', async (message) => {
-    if (settings.maintenanceMode) {
+    if (message.from === 'status@broadcast') return; // Abaikan update status
+    // PERBAIKAN: Admin bisa pakai bot walau mode perbaikan aktif
+    if (settings.maintenanceMode && message.from !== process.env.ADMIN_NUMBER) {
         return message.reply("🙏 Maaf, bot sedang dalam mode perbaikan. Coba lagi beberapa saat ya!");
     }
 
@@ -280,7 +306,7 @@ client.on('message', async (message) => {
     const user = getUser(user_id);
 
     if (user.isBanned) {
-        const bannedMessage = `Waduh, ${user.nickname}.. Akunmu sepertinya harus istirahat dulu karena ter-banned. 😬\n\nKalau kamu merasa ini sebuah kesalahan, coba deh ngobrol baik-baik sama admin di nomor 0895322080063 ya.`;
+        const bannedMessage = `Waduh, ${user.nickname}.. Akunmu sepertinya harus istirahat dulu karena ter-banned. 😬\n\nKalau kamu merasa ini sebuah kesalahan, coba deh ngobrol baik-baik sama admin di nomor ${process.env.ADMIN_NUMBER || 'owner'} ya.`;
         return message.reply(bannedMessage);
     }
 
@@ -301,7 +327,7 @@ client.on('message', async (message) => {
             const reported = getUser(partnerId);
             const timestamp = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
             let chatHistory = [];
-            const logPath = `${LOG_DIR}/${roomId}.json`;
+            const logPath = path.join(LOG_DIR, `${roomId}.json`);
             try {
                 if (fs.existsSync(logPath)) {
                     chatHistory = JSON.parse(fs.readFileSync(logPath, 'utf-8')).slice(-10);
@@ -375,7 +401,7 @@ client.on('message', async (message) => {
             }
             if (waitingQueue.length > 0) {
                 const partner_id = waitingQueue.shift();
-                if (partner_id === user_id) {
+                if (partner_id === user_id) { // Mencegah chat dengan diri sendiri jika ada race condition
                     waitingQueue.push(user_id);
                     return message.reply('Waduh, hampir aja kamu ngobrol sama diri sendiri! Aku cariin yang lain ya. 😄');
                 }
@@ -387,7 +413,7 @@ client.on('message', async (message) => {
                 db[partner_id].chatCount = (db[partner_id].chatCount || 0) + 1;
                 saveData(DB_FILE, db);
 
-                fs.writeFileSync(`${LOG_DIR}/${roomId}.json`, '[]');
+                fs.writeFileSync(path.join(LOG_DIR, `${roomId}.json`), '[]');
                 await client.sendMessage(user_id, `Asiiik, dapet temen baru! 🎉 Selamat ngobrol ya! Kalau mau udahan, ketik *!stop*.`);
                 await client.sendMessage(partner_id, `Yeay, ada yang mau ngobrol sama kamu nih! 🎉 Selamat bersenang-senang! Kalau mau udahan, ketik *!stop*.`);
             } else {
@@ -426,8 +452,8 @@ client.on('message', async (message) => {
         case '!stikergif':
             if (message.hasMedia && (message.type === 'video' || message.mimetype.includes('gif'))) {
                 message.reply('🎥 Wow, stiker gerak! Oke, aku proses dulu ya, ini butuh waktu sedikit lebih lama...');
-                const tempInputPath = `${TEMP_DIR}/input_${Date.now()}.mp4`;
-                const tempOutputPath = `${TEMP_DIR}/output_${Date.now()}.webp`;
+                const tempInputPath = path.join(TEMP_DIR, `input_${Date.now()}.mp4`);
+                const tempOutputPath = path.join(TEMP_DIR, `output_${Date.now()}.webp`);
                 try {
                     const media = await message.downloadMedia();
                     fs.writeFileSync(tempInputPath, Buffer.from(media.data, 'base64'));
@@ -444,12 +470,14 @@ client.on('message', async (message) => {
                                 stickerName: `Animasi by ${user.nickname}`
                             });
                         }
+                        // Selalu hapus file temporary setelah selesai
                         if (fs.existsSync(tempInputPath)) fs.unlinkSync(tempInputPath);
                         if (fs.existsSync(tempOutputPath)) fs.unlinkSync(tempOutputPath);
                     });
                 } catch (err) {
                     console.error('Sticker GIF Error:', err);
                     message.reply('Waduh, ada masalah nih pas aku proses videonya. Coba lagi ya.');
+                     // Pastikan file temporary dihapus bahkan jika ada error
                     if (fs.existsSync(tempInputPath)) fs.unlinkSync(tempInputPath);
                     if (fs.existsSync(tempOutputPath)) fs.unlinkSync(tempOutputPath);
                 }
@@ -462,7 +490,7 @@ client.on('message', async (message) => {
 
 
 // =================================================================
-//                    MENJALANKAN SERVER & BOT
+//                      MENJALANKAN SERVER & BOT
 // =================================================================
 customLog('Bot sedang dijalankan...');
 if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR);
@@ -478,11 +506,13 @@ client.on('qr', async (qr) => {
     qrCodeDataUrl = await qrcode.toDataURL(qr);
     customLog('[CLIENT] Butuh scan QR Code nih. Cek dashboard ya!');
 });
+
 client.on('ready', () => {
     botStatus = 'CONNECTED';
     qrCodeDataUrl = '';
     customLog('🚀 Bot WhatsApp sudah siap dan terhubung! Mari kita mulai!');
 });
+
 client.on('disconnected', (reason) => {
     botStatus = 'DISCONNECTED';
     customLog(`[CLIENT DISCONNECTED] Koneksi terputus: ${reason}. Mencoba menyambungkan kembali...`);
