@@ -7,6 +7,7 @@ const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const fs = require('fs');
 const express = require('express');
 const { exec } = require('child_process');
+const cors = require('cors'); // Penting untuk Railway
 
 // Inisialisasi Klien, dan Web Server
 const client = new Client({
@@ -14,7 +15,7 @@ const client = new Client({
     puppeteer: { args: ['--no-sandbox', '--disable-setuid-sandbox'] }
 });
 const app = express();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 3000; // Wajib untuk Railway
 
 // =================================================================
 //                    PENGATURAN & VARIABEL GLOBAL
@@ -37,6 +38,7 @@ let serverLogs = [];
 let settings = {};
 
 // Middleware untuk membaca JSON dan form data dari dashboard
+app.use(cors()); // Wajib untuk Railway agar dashboard bisa mengambil data
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -140,18 +142,16 @@ app.get('/dashboard', (req, res) => res.render('dashboard'));
 
 // --- RUTE API UTAMA ---
 
-// API Status (Ditingkatkan untuk mendukung semua fitur baru)
 app.get('/api/status', (req, res) => {
-    // Simulasi data analitik (dalam aplikasi nyata, ini harus dari database)
     const metrics = {
         totalUsers: Object.keys(db).length,
         activeToday: Object.values(db).filter(u => new Date(u.joinDate).toDateString() === new Date().toDateString()).length,
-        totalChats24h: violations.length, // Contoh sederhana
+        totalChats24h: violations.length,
         banned: Object.values(db).filter(u => u.isBanned).length
     };
     const analytics = {
-        userGrowth: { labels: ['Day 1', 'Day 2'], data: [10, 15] }, // Data dummy
-        peakHours: { labels: ['00:00', '03:00'], data: [5, 12] }, // Data dummy
+        userGrowth: { labels: ['Day 1', 'Day 2'], data: [10, 15] },
+        peakHours: { labels: ['00:00', '03:00'], data: [5, 12] },
         violationTypes: { labels: ['Kata Kasar', 'Laporan'], data: [violations.filter(v=>v.type === 'Kata Kasar').length, violations.filter(v=>v.type !== 'Kata Kasar').length] }
     };
 
@@ -284,12 +284,11 @@ client.on('message', async (message) => {
         return message.reply(bannedMessage);
     }
 
-    // --- LOGIKA SAAT DALAM CHAT AKTIF ---
     if (activeChats[user_id]) {
-        const { partner: partner_id, roomId, user1, user2 } = activeChats[user_id];
+        const { roomId, user1, user2 } = activeChats[user_id];
+        const partnerId = (user_id === user1) ? user2 : user1;
         
         if (lowerCaseText === '!stop' || lowerCaseText === '!skip') {
-            const partnerId = (user_id === user1) ? user2 : user1;
             delete activeChats[user_id];
             delete activeChats[partnerId];
             await message.reply('Kamu memilih untuk udahan. Sampai jumpa di obrolan lainnya! Ketik *!chat* lagi yuk! 👋');
@@ -298,7 +297,6 @@ client.on('message', async (message) => {
         }
 
         if (lowerCaseText === '!lapor') {
-            const partnerId = (user_id === user1) ? user2 : user1;
             const reporter = getUser(user_id);
             const reported = getUser(partnerId);
             const timestamp = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
@@ -326,7 +324,6 @@ client.on('message', async (message) => {
         }
 
         if (message.hasMedia && (message.type === 'image' || message.type === 'sticker' || message.type === 'video')) {
-            const partnerId = (user_id === user1) ? user2 : user1;
             await message.reply('⏳ _Sabar ya, medianya lagi OTW ke partner kamu..._');
             try {
                 const media = await message.downloadMedia();
@@ -353,14 +350,12 @@ client.on('message', async (message) => {
         }
 
         if (text) {
-            const partnerId = (user_id === user1) ? user2 : user1;
             logChatMessage(roomId, user_id, text);
             await client.sendMessage(partnerId, text);
         }
         return;
     }
 
-    // --- LOGIKA PERINTAH UTAMA ---
     const command = lowerCaseText.split(' ')[0];
     if (['halo', 'p', 'assalamualaikum', '!menu', 'hai'].includes(command)) {
         if (!user.hasSeenRules) {
@@ -380,7 +375,7 @@ client.on('message', async (message) => {
             }
             if (waitingQueue.length > 0) {
                 const partner_id = waitingQueue.shift();
-                if (partner_id === user_id) { // Mencegah dapat diri sendiri
+                if (partner_id === user_id) {
                     waitingQueue.push(user_id);
                     return message.reply('Waduh, hampir aja kamu ngobrol sama diri sendiri! Aku cariin yang lain ya. 😄');
                 }
@@ -475,7 +470,7 @@ if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR);
 loadAllData();
 
 app.listen(port, () => {
-    customLog(`🚀 Dashboard web berjalan di http://localhost:${port}/dashboard`);
+    customLog(`🚀 Dashboard web berjalan di port: ${port}`);
 });
 
 client.on('qr', async (qr) => {
