@@ -1,5 +1,5 @@
 // =================================================================
-//                          MODUL & INISIALISASI
+//                         MODUL & INISIALISASI
 // =================================================================
 const qrcode = require('qrcode');
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
@@ -15,7 +15,7 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 // =================================================================
-//                      PENGATURAN & VARIABEL GLOBAL
+//                       PENGATURAN & VARIABEL GLOBAL
 // =================================================================
 const DB_FILE = './database.json';
 const VIOLATIONS_FILE = './violations.json';
@@ -34,7 +34,7 @@ let broadcastStatus = { isRunning: false, progress: 0, total: 0, currentUser: ''
 app.use(express.urlencoded({ extended: true }));
 
 // =================================================================
-//                          FUNGSI HELPER
+//                             FUNGSI HELPER
 // =================================================================
 
 function customLog(message) {
@@ -125,7 +125,7 @@ function logChatMessage(roomId, userId, message, mediaType = 'text') {
 }
 
 // =================================================================
-//                      PENGATURAN WEB SERVER & RUTE
+//                       PENGATURAN WEB SERVER & RUTE
 // =================================================================
 app.set('view engine', 'ejs');
 app.get('/', (req, res) => res.redirect('/dashboard'));
@@ -243,7 +243,7 @@ app.post('/broadcast', (req, res) => {
 
 
 // =================================================================
-//                      LOGIKA UTAMA BOT WHATSAPP
+//                       LOGIKA UTAMA BOT WHATSAPP
 // =================================================================
 client.on('message', async (message) => {
     const text = message.body.trim();
@@ -306,19 +306,35 @@ client.on('message', async (message) => {
             await client.sendMessage(partner_id, 'Sesi chat telah dihentikan oleh sistem karena adanya laporan dari partner.');
             return;
         }
+        
+        // ==================================================
+        //         PERBAIKAN FITUR KIRIM STIKER & GAMBAR
+        // ==================================================
         if (message.hasMedia && (message.type === 'image' || message.type === 'sticker')) {
             await message.reply('⏳ _Sedang meneruskan media ke partner..._');
             try {
                 const media = await message.downloadMedia();
                 logChatMessage(roomId, user_id, '', message.type);
-                await client.sendMessage(partner_id, media, {
-                    caption: message.type === 'image' ? text : undefined
-                });
+
+                // Siapkan opsi pengiriman berdasarkan tipe media
+                const sendOptions = {};
+                if (message.type === 'sticker') {
+                    sendOptions.sendMediaAsSticker = true;
+                } else if (message.type === 'image') {
+                    // Hanya gambar yang bisa punya caption
+                    sendOptions.caption = text;
+                }
+
+                // Kirim media ke partner dengan opsi yang benar
+                await client.sendMessage(partner_id, media, sendOptions);
+
             } catch (error) {
                 message.reply('Duh, maaf, gagal meneruskan media.');
+                customLog(`Gagal meneruskan media: ${error.message}`);
             }
             return;
         }
+
         if (checkProfanity(text)) {
             const timestamp = new Date().toLocaleString('id-ID', {
                 timeZone: 'Asia/Jakarta'
@@ -414,7 +430,7 @@ client.on('message', async (message) => {
 
 
 // =================================================================
-//                      MENJALANKAN SERVER & BOT
+//                       MENJALANKAN SERVER & BOT
 // =================================================================
 customLog('Bot sedang dijalankan...');
 if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR);
