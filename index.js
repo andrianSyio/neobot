@@ -33,6 +33,7 @@ let broadcastStatus = { isRunning: false, progress: 0, total: 0, currentUser: ''
 
 app.use(express.urlencoded({ extended: true }));
 
+
 // =================================================================
 //                          FUNGSI HELPER
 // =================================================================
@@ -78,7 +79,9 @@ function getUser(userId) {
     return db[userId];
 }
 
-function generateRoomId() { return `wafa${Math.floor(100000 + Math.random() * 900000)}`; }
+function generateRoomId() {
+    return `wafa${Math.floor(100000 + Math.random() * 900000)}`;
+}
 
 function checkProfanity(message) {
     const words = message.toLowerCase().split(/\s+/);
@@ -89,7 +92,7 @@ function logChatMessage(roomId, userId, message, mediaType = 'text') {
     const logPath = `${LOG_DIR}/${roomId}.json`;
     const user = getUser(userId);
     const timestamp = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
-    const logEntry = { timestamp, nickname: user.nickname, message: mediaType === 'text' ? message : `[Media: ${mediaType}]` };
+    const logEntry = { timestamp, userId, nickname: user.nickname, message: mediaType === 'text' ? message : `[Media: ${mediaType}]` };
     try {
         let logs = [];
         if (fs.existsSync(logPath)) { logs = JSON.parse(fs.readFileSync(logPath, 'utf-8')); }
@@ -97,6 +100,7 @@ function logChatMessage(roomId, userId, message, mediaType = 'text') {
         fs.writeFileSync(logPath, JSON.stringify(logs, null, 2));
     } catch (error) { customLog(`Gagal menulis log chat untuk room ${roomId}: ${error.message}`); }
 }
+
 
 // =================================================================
 //                      PENGATURAN WEB SERVER & RUTE
@@ -122,7 +126,9 @@ app.get('/api/status', (req, res) => {
     res.json({ users: usersArray, waiting: waitingUsers, active: activePairs, violations, botStatus: botStatus, qrCode: qrCodeDataUrl, serverLogs: serverLogs });
 });
 
-app.get('/api/broadcast-status', (req, res) => { res.json(broadcastStatus); });
+app.get('/api/broadcast-status', (req, res) => {
+    res.json(broadcastStatus);
+});
 
 app.get('/api/chatlog/:roomId', (req, res) => {
     const roomId = req.params.roomId.replace(/[^a-zA-Z0-9]/g, '');
@@ -166,6 +172,7 @@ app.post('/broadcast', (req, res) => {
     })();
 });
 
+
 // =================================================================
 //                      LOGIKA UTAMA BOT WHATSAPP
 // =================================================================
@@ -180,21 +187,28 @@ client.on('message', async (message) => {
     if (activeChats[user_id]) {
         const { partner: partner_id, roomId } = activeChats[user_id];
         if (lowerCaseText === '!stop' || lowerCaseText === '!skip') {
-            delete activeChats[user_id]; delete activeChats[partner_id];
+            delete activeChats[user_id];
+            delete activeChats[partner_id];
             await message.reply('Sesi chat diakhiri. Ketik *!chat* untuk mencari partner baru.');
             await client.sendMessage(partner_id, 'Yah, partnermu telah mengakhiri sesi. Jangan sedih, yuk cari lagi dengan ketik *!chat*! 😊');
             return;
         }
         if (lowerCaseText === '!lapor') {
-            const reporter = getUser(user_id); const reported = getUser(partner_id); const timestamp = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
+            const reporter = getUser(user_id);
+            const reported = getUser(partner_id);
+            const timestamp = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
             let chatHistory = [];
             const logPath = `${LOG_DIR}/${roomId}.json`;
             try {
-                if (fs.existsSync(logPath)) { const logContent = fs.readFileSync(logPath, 'utf-8'); chatHistory = JSON.parse(logContent).slice(-10); }
+                if (fs.existsSync(logPath)) {
+                    const logContent = fs.readFileSync(logPath, 'utf-8');
+                    chatHistory = JSON.parse(logContent).slice(-10);
+                }
             } catch (error) { customLog(`Gagal membaca log untuk laporan: ${error.message}`); }
             violations.push({ timestamp, type: 'Laporan Pengguna', roomId, reporter: { id: user_id, nickname: reporter.nickname }, reported: { id: partner_id, nickname: reported.nickname }, chatHistory });
             saveViolations();
-            delete activeChats[user_id]; delete activeChats[partner_id];
+            delete activeChats[user_id];
+            delete activeChats[partner_id];
             await message.reply('Laporanmu telah diterima dan akan ditinjau oleh admin. Sesi chat ini telah dihentikan.');
             await client.sendMessage(partner_id, 'Sesi chat telah dihentikan oleh sistem karena adanya laporan dari partner.');
             return;
@@ -228,13 +242,32 @@ client.on('message', async (message) => {
     switch (command) {
         case '!chat':
             if (waitingQueue.includes(user_id)) return message.reply('Tenang, kamu sudah dalam antrian kok. Aku lagi cariin partner yang pas, sabar ya!');
-            await findPartner(message);
+            
+            // PERBAIKAN: Logika findPartner dikembalikan ke sini
+            if (waitingQueue.length > 0) {
+                const partner_id = waitingQueue.shift();
+                if (partner_id === user_id) {
+                    waitingQueue.push(user_id);
+                    return message.reply('Ups, hampir dapat diri sendiri. Mencari partner lain...');
+                }
+                const roomId = generateRoomId();
+                activeChats[user_id] = { partner: partner_id, roomId };
+                activeChats[partner_id] = { partner: user_id, roomId };
+                fs.writeFileSync(`${LOG_DIR}/${roomId}.json`, '[]');
+                await client.sendMessage(user_id, `Asiik, partner ditemukan! Selamat ngobrol ya!\n\nKalau sudah selesai, jangan lupa ketik *!stop* atau *!lapor*.`);
+                await client.sendMessage(partner_id, `Asiik, partner ditemukan! Selamat ngobrol ya!\n\nKalau sudah selesai, jangan lupa ketik *!stop* atau *!lapor*.`);
+            } else {
+                waitingQueue.push(user_id);
+                await message.reply('Oke, kamu masuk antrian ya. Aku lagi cariin partner yang pas buatmu, sabar sebentar...');
+            }
             break;
         case '!stop':
             if (waitingQueue.includes(user_id)) {
                 waitingQueue = waitingQueue.filter(id => id !== user_id);
                 await message.reply('Pencarian dibatalkan. Kalau berubah pikiran, panggil aku lagi dengan *!chat* ya!');
-            } else { await message.reply('Hmm, sepertinya kamu sedang tidak dalam sesi chat atau antrian.'); }
+            } else {
+                await message.reply('Hmm, sepertinya kamu sedang tidak dalam sesi chat atau antrian.');
+            }
             break;
         case '!stiker':
              if (message.hasMedia) {
@@ -242,12 +275,15 @@ client.on('message', async (message) => {
                 try {
                     const media = await message.downloadMedia();
                     await client.sendMessage(message.from, media, { sendMediaAsSticker: true, stickerAuthor: "AnonyChat Bot", stickerName: `Stiker by ${user.nickname}` });
-                } catch (error) { message.reply('Duh, maaf, sepertinya ada masalah saat membuat stiker.'); }
-            } else { message.reply('Kirim gambarnya dulu dengan caption *!stiker* untuk dibuatkan stiker ya.'); }
+                } catch (error) {
+                    message.reply('Duh, maaf, sepertinya ada masalah saat membuat stiker.');
+                }
+            } else {
+                message.reply('Kirim gambarnya dulu dengan caption *!stiker* untuk dibuatkan stiker ya.');
+            }
             break;
     }
 });
-
 
 // =================================================================
 //                      MENJALANKAN SERVER & BOT
