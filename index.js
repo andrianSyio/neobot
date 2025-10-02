@@ -5,6 +5,7 @@ const qrcode = require('qrcode');
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const fs = require('fs');
 const express = require('express');
+const { exec } = require('child_process'); // Diperlukan untuk FFmpeg
 const badWords = require('./profanity-list.js');
 
 const client = new Client({
@@ -20,6 +21,7 @@ const port = process.env.PORT || 3000;
 const DB_FILE = './database.json';
 const VIOLATIONS_FILE = './violations.json';
 const LOG_DIR = './chat_logs';
+const TEMP_DIR = './temp'; // Folder untuk file sementara
 
 let db = {};
 let violations = [];
@@ -189,9 +191,7 @@ app.get('/api/chatlog/:roomId', (req, res) => {
 
 app.post('/toggle-ban', (req, res) => {
     loadDatabase();
-    const {
-        userId
-    } = req.body;
+    const { userId } = req.body;
     const user = getUser(userId);
     if (user) {
         user.isBanned = !user.isBanned;
@@ -201,9 +201,7 @@ app.post('/toggle-ban', (req, res) => {
 });
 
 app.post('/broadcast', (req, res) => {
-    const {
-        message
-    } = req.body;
+    const { message } = req.body;
     if (!message) {
         return res.status(400).send("Pesan tidak boleh kosong.");
     }
@@ -251,17 +249,14 @@ client.on('message', async (message) => {
     const user_id = message.from;
     const user = getUser(user_id);
 
-    // PERBAIKAN: Logika baru untuk pesan banned
     if (user.isBanned) {
         const bannedMessage = `Waduh, ${user.nickname}. Sepertinya akunmu sedang ditangguhkan (di-banned) karena melanggar peraturan.\n\nUntuk diskusi lebih lanjut mengenai pembukaan blokir, silakan hubungi admin di nomor 0895322080063 ya.`;
         return message.reply(bannedMessage);
     }
 
     if (activeChats[user_id]) {
-        const {
-            partner: partner_id,
-            roomId
-        } = activeChats[user_id];
+        const { partner: partner_id, roomId } = activeChats[user_id];
+        
         if (lowerCaseText === '!stop' || lowerCaseText === '!skip') {
             delete activeChats[user_id];
             delete activeChats[partner_id];
@@ -269,12 +264,11 @@ client.on('message', async (message) => {
             await client.sendMessage(partner_id, 'Yah, partnermu telah mengakhiri sesi. Jangan sedih, yuk cari lagi dengan ketik *!chat*! 😊');
             return;
         }
+
         if (lowerCaseText === '!lapor') {
             const reporter = getUser(user_id);
             const reported = getUser(partner_id);
-            const timestamp = new Date().toLocaleString('id-ID', {
-                timeZone: 'Asia/Jakarta'
-            });
+            const timestamp = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
             let chatHistory = [];
             const logPath = `${LOG_DIR}/${roomId}.json`;
             try {
@@ -286,17 +280,9 @@ client.on('message', async (message) => {
                 customLog(`Gagal membaca log untuk laporan: ${error.message}`);
             }
             violations.push({
-                timestamp,
-                type: 'Laporan Pengguna',
-                roomId,
-                reporter: {
-                    id: user_id,
-                    nickname: reporter.nickname
-                },
-                reported: {
-                    id: partner_id,
-                    nickname: reported.nickname
-                },
+                timestamp, type: 'Laporan Pengguna', roomId,
+                reporter: { id: user_id, nickname: reporter.nickname },
+                reported: { id: partner_id, nickname: reported.nickname },
                 chatHistory
             });
             saveViolations();
@@ -307,27 +293,18 @@ client.on('message', async (message) => {
             return;
         }
         
-        // ==================================================
-        //         PERBAIKAN FITUR KIRIM STIKER & GAMBAR
-        // ==================================================
         if (message.hasMedia && (message.type === 'image' || message.type === 'sticker')) {
             await message.reply('⏳ _Sedang meneruskan media ke partner..._');
             try {
                 const media = await message.downloadMedia();
                 logChatMessage(roomId, user_id, '', message.type);
-
-                // Siapkan opsi pengiriman berdasarkan tipe media
                 const sendOptions = {};
                 if (message.type === 'sticker') {
                     sendOptions.sendMediaAsSticker = true;
                 } else if (message.type === 'image') {
-                    // Hanya gambar yang bisa punya caption
                     sendOptions.caption = text;
                 }
-
-                // Kirim media ke partner dengan opsi yang benar
                 await client.sendMessage(partner_id, media, sendOptions);
-
             } catch (error) {
                 message.reply('Duh, maaf, gagal meneruskan media.');
                 customLog(`Gagal meneruskan media: ${error.message}`);
@@ -336,20 +313,15 @@ client.on('message', async (message) => {
         }
 
         if (checkProfanity(text)) {
-            const timestamp = new Date().toLocaleString('id-ID', {
-                timeZone: 'Asia/Jakarta'
-            });
+            const timestamp = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
             violations.push({
-                timestamp,
-                type: 'Kata Kasar',
-                userId: user_id,
-                nickname: user.nickname,
-                roomId,
-                message: text
+                timestamp, type: 'Kata Kasar', userId: user_id,
+                nickname: user.nickname, roomId, message: text
             });
             saveViolations();
             return message.reply('Eits, bahasanya dijaga ya. Pesanmu nggak aku kirim dan aku catat sebagai pelanggaran.');
         }
+
         if (text) {
             logChatMessage(roomId, user_id, text);
             setTimeout(() => {
@@ -361,7 +333,6 @@ client.on('message', async (message) => {
 
     const command = lowerCaseText.split(' ')[0];
     if (['halo', 'p', 'salam', '!menu'].includes(command)) {
-        // Logika untuk menampilkan peraturan saat pertama kali
         if (!user.hasSeenRules) {
             const rulesText = `*Selamat Datang di AnonyChat Bot!* 👋\n\nSebelum mulai, harap baca dan patuhi peraturan berikut:\n\n1.  *Dilarang Keras* berkata kasar, menghina SARA, atau menyebarkan ujaran kebencian.\n2.  *Dilarang Spamming* atau mengirim pesan berlebihan (flood).\n3.  *Jaga Privasi!* Jangan membagikan informasi pribadi (nomor HP, medsos, dll).\n4.  Gunakan bot dengan bijak. Admin dapat mem-banned pengguna yang melanggar aturan.\n\nSelamat bersenang-senang!`;
             await message.reply(rulesText);
@@ -369,8 +340,7 @@ client.on('message', async (message) => {
             saveDatabase();
             await new Promise(resolve => setTimeout(resolve, 1000));
         }
-
-        const menuText = `Hai *${user.nickname}*! 👋 Selamat datang di bot AnonyChat & Stiker.\n\n*Fitur yang tersedia:*\n\n- *!chat*\n    _Mencari partner ngobrol acak._\n\n- *!stop* / *!skip*\n    _Menghentikan sesi chat atau pencarian._\n\n- *!lapor*\n    _Melaporkan partner chat Anda saat ini._\n\n- *!stiker*\n    _Kirim gambar dengan caption ini untuk jadi stiker._`;
+        const menuText = `Hai *${user.nickname}*! 👋 Selamat datang di bot AnonyChat & Stiker.\n\n*Fitur yang tersedia:*\n\n- *!chat*\n    _Mencari partner ngobrol acak._\n\n- *!stop* / *!skip*\n    _Menghentikan sesi chat atau pencarian._\n\n- *!lapor*\n    _Melaporkan partner chat Anda saat ini._\n\n- *!stiker*\n    _Kirim gambar dengan caption ini untuk jadi stiker._\n\n- *!stikergif*\n    _Kirim video/GIF dengan caption ini untuk jadi stiker gerak (Max 7 detik)._`;
         return message.reply(menuText);
     }
 
@@ -384,14 +354,8 @@ client.on('message', async (message) => {
                     return message.reply('Ups, hampir dapat diri sendiri. Mencari partner lain...');
                 }
                 const roomId = generateRoomId();
-                activeChats[user_id] = {
-                    partner: partner_id,
-                    roomId
-                };
-                activeChats[partner_id] = {
-                    partner: user_id,
-                    roomId
-                };
+                activeChats[user_id] = { partner: partner_id, roomId };
+                activeChats[partner_id] = { partner: user_id, roomId };
                 fs.writeFileSync(`${LOG_DIR}/${roomId}.json`, '[]');
                 await client.sendMessage(user_id, `Asiik, partner ditemukan! Selamat ngobrol ya!\n\nKalau sudah selesai, jangan lupa ketik *!stop* atau *!lapor*.`);
                 await client.sendMessage(partner_id, `Asiik, partner ditemukan! Selamat ngobrol ya!\n\nKalau sudah selesai, jangan lupa ketik *!stop* atau *!lapor*.`);
@@ -400,6 +364,7 @@ client.on('message', async (message) => {
                 await message.reply('Oke, kamu masuk antrian ya. Aku lagi cariin partner yang pas buatmu, sabar sebentar...');
             }
             break;
+
         case '!stop':
             if (waitingQueue.includes(user_id)) {
                 waitingQueue = waitingQueue.filter(id => id !== user_id);
@@ -408,6 +373,7 @@ client.on('message', async (message) => {
                 await message.reply('Hmm, sepertinya kamu sedang tidak dalam sesi chat atau antrian.');
             }
             break;
+
         case '!stiker':
             if (message.hasMedia) {
                 message.reply('Sip, stikernya lagi dibikin nih...');
@@ -425,6 +391,40 @@ client.on('message', async (message) => {
                 message.reply('Kirim gambarnya dulu dengan caption *!stiker* untuk dibuatkan stiker ya.');
             }
             break;
+
+        case '!stikergif':
+            if (message.hasMedia && message.type === 'video') {
+                message.reply('🎥 Oke, stiker geraknya lagi diproses! Mohon tunggu sebentar, ini butuh waktu beberapa saat...');
+                const tempInputPath = `${TEMP_DIR}/input_${Date.now()}.mp4`;
+                const tempOutputPath = `${TEMP_DIR}/output_${Date.now()}.webp`;
+                try {
+                    const media = await message.downloadMedia();
+                    fs.writeFileSync(tempInputPath, Buffer.from(media.data, 'base64'));
+                    const ffmpegCommand = `ffmpeg -i ${tempInputPath} -vcodec libwebp -vf "scale=512:512:force_original_aspect_ratio=decrease,fps=15,pad=512:512:-1:-1:color=white@0.0" -an -ss 00:00:00.0 -t 00:00:07.0 -loop 0 ${tempOutputPath}`;
+                    exec(ffmpegCommand, async (error) => {
+                        if (error) {
+                            console.error('FFMPEG Error:', error);
+                            message.reply('Duh, maaf, gagal membuat stiker gerak. Coba video lain yang lebih pendek ya.');
+                        } else {
+                            await client.sendMessage(message.from, MessageMedia.fromFilePath(tempOutputPath), {
+                                sendMediaAsSticker: true,
+                                stickerAuthor: "AnonyChat Bot",
+                                stickerName: `Animasi by ${user.nickname}`
+                            });
+                        }
+                        if (fs.existsSync(tempInputPath)) fs.unlinkSync(tempInputPath);
+                        if (fs.existsSync(tempOutputPath)) fs.unlinkSync(tempOutputPath);
+                    });
+                } catch (err) {
+                    console.error('Sticker GIF Error:', err);
+                    message.reply('Waduh, ada masalah saat memproses videomu.');
+                    if (fs.existsSync(tempInputPath)) fs.unlinkSync(tempInputPath);
+                    if (fs.existsSync(tempOutputPath)) fs.unlinkSync(tempOutputPath);
+                }
+            } else {
+                message.reply('Kirim video dengan caption *!stikergif* untuk dibuatkan stiker ya (durasi maks 7 detik).');
+            }
+            break;
     }
 });
 
@@ -434,6 +434,7 @@ client.on('message', async (message) => {
 // =================================================================
 customLog('Bot sedang dijalankan...');
 if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR);
+if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR); // Pastikan folder temp ada
 loadDatabase();
 loadViolations();
 
@@ -446,11 +447,13 @@ client.on('qr', async (qr) => {
     qrCodeDataUrl = await qrcode.toDataURL(qr);
     customLog('[CLIENT] QR Code perlu di-scan. Tampilkan di dashboard.');
 });
+
 client.on('ready', () => {
     botStatus = 'CONNECTED';
     qrCodeDataUrl = '';
     customLog('🚀 Bot WhatsApp sudah siap dan terhubung!');
 });
+
 client.on('disconnected', (reason) => {
     botStatus = 'DISCONNECTED';
     customLog(`[CLIENT DISCONNECTED] ${reason}.`);
